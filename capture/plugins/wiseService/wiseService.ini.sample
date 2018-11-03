@@ -41,7 +41,7 @@ excludeDomains=*.bl.barracudabrts.com;*.zen.spamhaus.org;*.in-addr.arpa;*.avts.m
 # Type should be ip, domain, md5, email
 # Files are assumed to be CSV or use format=tagger
 [file:blah]
-file=/tmp/test.ips
+file=/etc/wise/test.ips
 type=ip
 tags=TAG1,TAG2
 #column=1
