@@ -1,0 +1,37 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wise-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: wise-service
+  template:
+    metadata:
+      labels:
+        app: wise-service
+    spec:
+      containers:
+      - name: wise-service
+        image: p4ulpc/moloch-wise:latest
+        imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+        ports:
+        - containerPort: 8081
+        volumeMounts:
+        - name: azure
+          mountPath: /data/enrichment/
+      volumes:
+      - name: azure
+        azureFile:
+          secretName: azure-secret
+          shareName: enrichment
+          readOnly: false
