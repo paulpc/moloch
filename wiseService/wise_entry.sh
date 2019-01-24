@@ -1,7 +1,6 @@
-#!/bin/bash
-set -ex
+#!/bin/sh
 if [ "$1" = 'wise' ]; then
-    gosu wiseservice node wiseService.js -c /data/enrichment/wise/wiseService.ini
+    su-exec wiseservice:wiseservice node wiseService.js -c /data/enrichment/wise/wiseService.ini
 else
-    exec "$@"
+    su-exec wiseservice:wiseservice "$@"
 fi
