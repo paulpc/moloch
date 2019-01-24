@@ -194,7 +194,7 @@ LOCAL void dropbox_lan_sync_classify(MolochSession_t *session, const unsigned ch
 /******************************************************************************/
 LOCAL void kafka_classify(MolochSession_t *session, const unsigned char *data, int len, int UNUSED(which), void *UNUSED(uw))
 {
-    if (len < 50 || data[4] != 0 || data[5] > 6|| data[7] != 0 || data[8] != 0)
+    if (len < 10 || data[4] != 0 || data[5] > 6|| data[7] != 0)
         return;
 
     int flen = 4 + ((data[2] << 8) | data[3]);
@@ -472,7 +472,7 @@ void moloch_parser_init()
     moloch_parsers_classifier_register_port("hsrp",  NULL, 1985, MOLOCH_PARSERS_PORT_UDP, hsrp_udp_classify);
     moloch_parsers_classifier_register_port("hsrp",  NULL, 2029, MOLOCH_PARSERS_PORT_UDP, hsrp_udp_classify);
 
-    moloch_parsers_classifier_register_udp("elasticsearch", "elasticsearch", 0, (unsigned char*)"ES\x00\x00", 4, misc_add_protocol_classify);
+    moloch_parsers_classifier_register_tcp("elasticsearch", "elasticsearch", 0, (unsigned char*)"ES\x00\x00", 4, misc_add_protocol_classify);
 
 
     userField = moloch_field_by_db("user");

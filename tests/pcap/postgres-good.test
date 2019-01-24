@@ -2,6 +2,7 @@
    "sessions2" : [
       {
          "body" : {
+            "communityId" : "1:+KMQwe1GBT7eaCQAYnV9v0ga8zw=",
             "dstBytes" : 665,
             "dstDataBytes" : 327,
             "dstIp" : "10.0.13.120",
@@ -18,6 +19,7 @@
             "dstPort" : 5432,
             "fileId" : [],
             "firstPacket" : 1399300685023,
+            "initRTT" : 0,
             "ipProtocol" : 6,
             "lastPacket" : 1399300685032,
             "length" : 8,

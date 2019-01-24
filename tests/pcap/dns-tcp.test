@@ -2,6 +2,7 @@
    "sessions2" : [
       {
          "body" : {
+            "communityId" : "1:aiyyBmnGUlby3uK/mWpMfvJm2U4=",
             "dns" : {
                "ASN" : [
                   "AS15169 Google LLC",
@@ -126,6 +127,7 @@
             "dstPort" : 53,
             "fileId" : [],
             "firstPacket" : 1385482078892,
+            "initRTT" : 0,
             "ipProtocol" : 6,
             "lastPacket" : 1385482078899,
             "length" : 7,
@@ -200,6 +202,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:Ni+vClyYvGtwxC4Wu5dkGjaQ8ts=",
             "dns" : {
                "ASN" : [
                   "AS1668 AOL Transit Data Network",
@@ -300,6 +303,7 @@
             "dstPort" : 53,
             "fileId" : [],
             "firstPacket" : 1385482080084,
+            "initRTT" : 0,
             "ipProtocol" : 6,
             "lastPacket" : 1385482080086,
             "length" : 2,

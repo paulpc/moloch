@@ -337,6 +337,8 @@ void moloch_session_mid_save(MolochSession_t *session, uint32_t tv_sec)
     session->packets[0] = 0;
     session->packets[1] = 0;
     session->midSave = 0;
+    session->ackTime = 0;
+    session->synTime = 0;
     memset(session->tcpFlagCnt, 0, sizeof(session->tcpFlagCnt));
 }
 /******************************************************************************/
@@ -421,6 +423,7 @@ MolochSession_t *moloch_session_find_or_create(int ses, uint32_t hash, char *ses
 
     session = MOLOCH_TYPE_ALLOC0(MolochSession_t);
     session->ses = ses;
+    session->stopSaving = 0xffff;
 
     memcpy(session->sessionId, sessionId, sessionId[0]);
 
@@ -451,7 +454,7 @@ uint32_t moloch_session_monitoring()
     int      t, s;
 
     for (t = 0; t < config.packetThreads; t++) {
-        for (s = 0; s < config.packetThreads; s++) {
+        for (s = 0; s < SESSION_MAX; s++) {
             count += HASH_COUNT(h_, sessions[t][s]);
         }
     }
@@ -635,7 +638,8 @@ void moloch_session_exit()
         }
     }
 
-    LOG("sessions: %u tcp: %u udp: %u icmp: %u sctp: %u esp: %u",
+    if (!config.pcapReadOffline || config.debug)
+        LOG("sessions: %u tcp: %u udp: %u icmp: %u sctp: %u esp: %u",
             moloch_session_monitoring(),
             counts[SESSION_TCP],
             counts[SESSION_UDP],

@@ -526,6 +526,9 @@ LOCAL int cstring_cmp(const void *a, const void *b)
 /******************************************************************************/
 void moloch_parsers_init()
 {
+    if (config.nodeClass)
+        snprintf(classTag, sizeof(classTag), "class:%s", config.nodeClass);
+
     moloch_field_define("general", "integer",
         "session.segments", "Session Segments", "segmentCnt",
         "Number of segments in session so far",
@@ -707,7 +710,6 @@ void moloch_parsers_init()
 
 
     if (config.extraOps) {
-        int i;
         for (i = 0; config.extraOps[i]; i++) { }
         moloch_field_ops_init(&config.ops, i, 0);
         for (i = 0; config.extraOps[i]; i++) {

@@ -4,6 +4,7 @@
 
     <!-- search navbar -->
     <moloch-search
+      :fields="headers"
       :open-sessions="stickySessions"
       :num-visible-sessions="query.length"
       :num-matching-sessions="sessions.recordsFiltered"
@@ -50,7 +51,7 @@
       <!-- sessions results -->
       <table v-if="headers && headers.length"
         class="table-striped sessions-table"
-        style="{width: tableWidth + 'px'}"
+        :style="tableStyle"
         id="sessionsTable">
         <thead>
           <tr ref="draggableColumns">
@@ -63,7 +64,9 @@
                 no-flip
                 no-caret
                 class="col-vis-menu"
-                variant="theme-primary">
+                variant="theme-primary"
+                @show="colVisMenuOpen = true"
+                @hide="colVisMenuOpen = false">
                 <template slot="button-content">
                   <span class="fa fa-th"
                     v-b-tooltip.hover
@@ -79,7 +82,7 @@
                 </b-dropdown-header>
                 <b-dropdown-divider>
                 </b-dropdown-divider>
-                <template
+                <template v-if="colVisMenuOpen"
                   v-for="(group, key) in filteredFields">
                   <b-dropdown-header
                     :key="key"
@@ -92,8 +95,8 @@
                   <b-dropdown-item
                     v-for="(field, k) in group"
                     :key="key + k"
-                    :class="{'active':isVisible(field.dbField) >= 0}"
-                    @click.stop.prevent="toggleVisibility(field.dbField)"
+                    :class="{'active':isColVisible(field.dbField) >= 0}"
+                    @click.stop.prevent="toggleColVis(field.dbField)"
                     v-b-tooltip.hover.top
                     :title="field.help">
                     {{ field.friendlyName }}
@@ -181,7 +184,67 @@
               :key="header.dbField"
               class="moloch-col-header"
               :style="{'width': header.width + 'px'}"
-              :class="{'active':isSorted(header.sortBy || header.dbField) >= 0}">
+              :class="{'active':isSorted(header.sortBy || header.dbField) >= 0, 'info-col-header': header.dbField === 'info'}">
+              <!-- non-sortable column -->
+              <span v-if="header.dbField === 'info'"
+                class="cursor-pointer">
+                {{ header.friendlyName }}
+                <!-- info field visibility button -->
+                <b-dropdown
+                  size="sm"
+                  no-flip
+                  no-caret
+                  right
+                  class="col-vis-menu info-vis-menu pull-right"
+                  variant="theme-primary"
+                  @show="infoFieldVisMenuOpen = true"
+                  @hide="infoFieldVisMenuOpen = false">
+                  <template slot="button-content">
+                    <span class="fa fa-th-list"
+                      v-b-tooltip.hover
+                      title="Toggle visible fields">
+                    </span>
+                  </template>
+                  <b-dropdown-header>
+                    <input type="text"
+                      v-model="colQuery"
+                      class="form-control form-control-sm dropdown-typeahead"
+                      placeholder="Search for fields..."
+                    />
+                  </b-dropdown-header>
+                  <b-dropdown-divider>
+                  </b-dropdown-divider>
+                  <b-dropdown-item
+                    @click.stop.prevent="resetInfoVisibility"
+                    v-b-tooltip.hover.top
+                    title="Reset info column to default fields">
+                    Moloch Default
+                  </b-dropdown-item>
+                  <b-dropdown-divider>
+                  </b-dropdown-divider>
+                  <template v-if="infoFieldVisMenuOpen"
+                    v-for="(group, key) in filteredFields">
+                    <b-dropdown-header
+                      :key="key"
+                      v-if="group.length"
+                      class="group-header">
+                      {{ key }}
+                    </b-dropdown-header>
+                    <!-- TODO fix tooltip placement -->
+                    <!-- https://github.com/bootstrap-vue/bootstrap-vue/issues/1352 -->
+                    <b-dropdown-item
+                      v-for="(field, k) in group"
+                      :key="key + k"
+                      :class="{'active':isInfoVisible(field.dbField) >= 0}"
+                      @click.stop.prevent="toggleInfoVis(field.dbField)"
+                      v-b-tooltip.hover.top
+                      :title="field.help">
+                      {{ field.friendlyName }}
+                      <small>({{ field.exp }})</small>
+                    </b-dropdown-item>
+                  </template>
+                </b-dropdown> <!-- /info field visibility button -->
+              </span> <!-- /non-sortable column -->
               <!-- column dropdown menu -->
               <b-dropdown
                 right
@@ -189,7 +252,7 @@
                 size="sm"
                 class="pull-right">
                 <b-dropdown-item
-                  @click="toggleVisibility(header.dbField, header.sortBy)">
+                  @click="toggleColVis(header.dbField, header.sortBy)">
                   Hide Column
                 </b-dropdown-item>
                 <!-- single field column -->
@@ -272,11 +335,6 @@
                   {{ header.friendlyName }}
                 </div>
               </span> <!-- /sortable column -->
-              <!-- non-sortable column -->
-              <div v-if="header.dbField === 'info'"
-                class="cursor-pointer">
-                {{ header.friendlyName }}
-              </div> <!-- /non-sortable column -->
             </th> <!-- /table headers -->
             <button type="button"
               v-if="showFitButton && !loading"
@@ -336,7 +394,8 @@
                     :expr="col.exp"
                     :value="session[col.dbField]"
                     :parse="true"
-                    :timezone="user.settings.timezone">
+                    :timezone="user.settings.timezone"
+                    :info-fields="infoFields">
                   </moloch-session-field>
                 </span> <!-- /field value a single value -->
               </td> <!-- /field values -->
@@ -347,7 +406,9 @@
               class="session-detail-row">
               <td :colspan="headers.length + 1">
                 <moloch-session-detail
-                  :session="session">
+                  :session="session"
+                  @toggleColVis="toggleColVis"
+                  @toggleInfoVis="toggleInfoVis">
                 </moloch-session-detail>
               </td>
             </tr> <!-- /session detail -->
@@ -400,9 +461,11 @@ import Sortable from 'sortablejs';
 import '../../../../public/colResizable.js';
 
 const defaultTableState = {
-  order: [['firstPacket', 'asc']],
+  order: [['firstPacket', 'desc']],
   visibleHeaders: ['firstPacket', 'lastPacket', 'src', 'srcPort', 'dst', 'dstPort', 'totPackets', 'dbby', 'node', 'info']
 };
+
+let defaultInfoFields = JSON.parse(JSON.stringify(customCols.info.children));
 
 let componentInitialized = false;
 let holdingClick = false;
@@ -416,7 +479,18 @@ let tableDestroyed;
 // window/table resize variables
 let resizeTimeout;
 let windowResizeEvent;
-let defaultInfoColWidth = 250;
+const defaultColWidths = {
+  'firstPacket': 100,
+  'lastPacket': 100,
+  'src': 140,
+  'srcPort': 100,
+  'dst': 140,
+  'dstPort': 100,
+  'totPackets': 100,
+  'dbby': 120,
+  'node': 100,
+  'info': 250
+};
 
 export default {
   name: 'Sessions',
@@ -446,7 +520,10 @@ export default {
       mapData: undefined,
       colQuery: '', // query for columns to toggle visibility
       newColConfigName: '', // name of new custom column config
-      viewChanged: false
+      viewChanged: false,
+      infoFields: customCols.info.children,
+      colVisMenuOpen: false,
+      infoFieldVisMenuOpen: false
     };
   },
   created: function () {
@@ -488,17 +565,26 @@ export default {
       let filteredGroupedFields = {};
 
       for (let group in this.groupedFields) {
-        filteredGroupedFields[group] = this.groupedFields[group].filter((field) => {
-          return field.regex === undefined &&
-                 field.noFacet !== 'true' &&
-                 field.friendlyName.toLowerCase().includes(this.colQuery.toLowerCase());
-        });
+        filteredGroupedFields[group] = this.$options.filters.searchFields(
+          this.colQuery,
+          this.groupedFields[group]
+        );
       }
 
       return filteredGroupedFields;
     },
     views: function () {
       return this.$store.state.views;
+    },
+    tableStyle: function () {
+      let style = { width: this.tableWidth + 'px' };
+      // pad the bottom of the table so that opening a field
+      // dropdowns at the bottom doesn't make the table scrolly
+      if (this.sessions && this.sessions.data &&
+        this.sessions.data.length) {
+        style['margin-bottom'] = '300px';
+      }
+      return style;
     }
   },
   watch: {
@@ -706,19 +792,18 @@ export default {
      * @param {string} id       The id of the column
      * @return {number} number  The index of the visible header
      */
-    isVisible: function (id) {
-      return this.tableState.visibleHeaders.indexOf(id);
+    isColVisible: function (id) {
+      return this.isVisible(id, this.tableState.visibleHeaders);
     },
     /**
      * Toggles the visibility of a column given its id
      * @param {string} id   The id of the column to show/hide (toggle)
      * @param {string} sort Option sort id for columns that have sortBy
      */
-    toggleVisibility: function (id, sort) {
-      this.loading = true;
+    toggleColVis: function (id, sort) {
       let reloadData = false;
 
-      let index = this.isVisible(id);
+      let index = this.isColVisible(id);
 
       if (index >= 0) { // it's visible
         // remove it from the visible headers list
@@ -732,7 +817,7 @@ export default {
 
       this.mapHeadersToFields();
 
-      this.saveTableState(true);
+      this.saveTableState();
 
       if (reloadData) { // need data from the server
         this.loadData(true);
@@ -773,17 +858,25 @@ export default {
      * @param {int} index The index in the array of the column config to load
      */
     loadColumnConfiguration: function (index) {
+      $('#sessionsTable').colResizable({ disable: true });
+      colResizeInitialized = false;
+
       this.loading = true;
 
-      if (index === -1) {
+      if (index === -1) { // default columns
         this.tableState.visibleHeaders = defaultTableState.visibleHeaders.slice();
         this.tableState.order = defaultTableState.order.slice();
+        this.colWidths = {}; // clear out column widths to load defaults
+        setTimeout(() => { this.saveColumnWidths(); });
+        // reset field widths
+        for (let headerId of this.tableState.visibleHeaders) {
+          let field = this.getField(headerId);
+          if (field) { field.width = defaultColWidths[headerId] || 100; }
+        }
       } else {
         this.tableState.visibleHeaders = this.colConfigs[index].columns.slice();
         this.tableState.order = this.colConfigs[index].order.slice();
       }
-
-      this.mapHeadersToFields();
 
       this.query.sorts = this.tableState.order;
 
@@ -829,13 +922,104 @@ export default {
           this.colConfigError = error.text;
         });
     },
+    /**
+     * Determines a field's visibility in the array provided
+     * @param {string} id       The id of the column
+     * @param {array} array     The array to search for the field
+     * @return {number} number  The index of the visible header
+     */
+    isVisible: function (id, array) {
+      let index = 0;
+
+      for (let field of array) {
+        if (typeof field !== 'object') {
+          field = this.getField(field);
+        }
+
+        if (!field) { return -1; }
+
+        if (field.dbField === id || field.exp === id) {
+          return index;
+        }
+
+        if (field.aliases) { // check aliases too
+          for (let alias of field.aliases) {
+            if (id === alias) {
+              return index;
+            }
+          }
+        }
+
+        index++;
+      }
+
+      return -1;
+    },
+    /**
+     * Determines a field's visibility in the info column given its id
+     * @param {string} id       The id of the column
+     * @return {number} number  The index of the visible header
+     */
+    isInfoVisible: function (id) {
+      return this.isVisible(id, this.infoFields);
+    },
+    /**
+     * Toggles the visibility of a field in the info column given its id
+     * @param {string} id The id of the column to show/hide (toggle)
+     */
+    toggleInfoVis: function (id) {
+      let reloadData = false;
+
+      let index = this.isInfoVisible(id);
+
+      if (index >= 0) { // it's visible
+        // remove it from the info fields list
+        this.infoFields.splice(index, 1);
+      } else { // it's hidden
+        reloadData = true; // requires a data reload
+        // add it to the info fields list
+        let field = this.getField(id);
+        if (field) { this.infoFields.push(field); }
+      }
+
+      this.saveInfoFields();
+
+      if (reloadData) { // need data from the server
+        this.loadData(true);
+      } else { // have all the data, just need to reload the table
+        this.reloadTable();
+      }
+    },
+    /* Resets the visible fields in the info column to the default */
+    resetInfoVisibility: function () {
+      this.infoFields = defaultInfoFields;
+      customCols.info.children = defaultInfoFields;
+      this.user.settings.infoFields = undefined;
+
+      // make sure children of fields are field objects
+      this.setupFields();
+      // unset the user setting for info fields
+      this.saveInfoFields();
+      // load the table data (assume missing fields)
+      this.loadData(true);
+    },
+    /* Saves the info fields on the user settings */
+    saveInfoFields: function () {
+      let infoFields = [];
+      for (let field of this.infoFields) {
+        infoFields.push(field.dbField);
+      }
+      this.user.settings.infoFields = infoFields;
+      customCols.info.children = this.infoFields;
+      UserService.saveSettings(this.user.settings);
+    },
     /* Fits the table to the width of the current window size */
     fitTable: function () {
       // disable resizable columns so it can be initialized after columns are resized
       $('#sessionsTable').colResizable({ disable: true });
       colResizeInitialized = false;
 
-      let windowWidth = window.innerWidth;
+      let windowWidth = window.innerWidth - 34; // account for right and left margins
       let leftoverWidth = windowWidth - this.sumOfColWidths;
       let percentChange = 1 + (leftoverWidth / this.sumOfColWidths);
 
@@ -905,7 +1089,6 @@ export default {
           FieldService.get()
             .then((result) => {
               this.fields = result;
-              this.setupFields();
               this.setupUserSettings(); // IMPORTANT: kicks off the initial search query!
             }).catch((error) => {
               this.loading = false;
@@ -935,6 +1118,15 @@ export default {
         this.tableState.order = this.query.sorts;
       }
 
+      // if user had infoFields set, update the info fields and custom info column
+      if (this.user.settings && this.user.settings.infoFields) {
+        this.infoFields = this.user.settings.infoFields;
+        customCols.info.children = this.user.settings.infoFields;
+      }
+
+      // make sure children of fields are field objects
+      this.setupFields();
+
       // IMPORTANT: kicks off the initial search query
       if (!this.user.settings.manualQuery ||
         !JSON.parse(this.user.settings.manualQuery) ||
@@ -956,7 +1148,11 @@ export default {
       this.loading = true;
       this.error = '';
 
-      this.stickySessions = []; // clear sticky sessions
+      // save expanded sessions
+      let expandedSessions = [];
+      for (let session of this.stickySessions) {
+        expandedSessions.push(session.id);
+      }
 
       this.query.sorts = this.tableState.order || JSON.parse(JSON.stringify(defaultTableState.order));
 
@@ -979,12 +1175,17 @@ export default {
 
       // set the fields to retrieve from the server for each session
       if (this.headers) {
-        for (let i = 0; i < this.headers.length; ++i) {
-          let field = this.headers[i];
+        for (let field of this.headers) {
           if (field.children) {
-            for (let j = 0; j < field.children.length; ++j) {
-              let child = field.children[j];
-              if (child) { this.query.fields.push(child.dbField); }
+            let children = field.children;
+            // add user configurable child info fields
+            if (field.exp === 'info' && this.infoFields) {
+              children = JSON.parse(JSON.stringify(this.infoFields));
+            }
+            for (let child of children) {
+              if (child) {
+                this.query.fields.push(child.dbField);
+              }
             }
           } else {
             this.query.fields.push(field.dbField);
@@ -994,6 +1195,7 @@ export default {
 
       SessionsService.get(this.query)
         .then((response) => {
+          this.stickySessions = []; // clear sticky sessions
           this.error = '';
           this.loading = false;
           this.sessions = response.data;
@@ -1004,6 +1206,15 @@ export default {
 
           if (parseInt(this.$route.query.openAll) === 1) {
             this.openAll();
+          } else { // open the previously opened sessions
+            for (let sessionId of expandedSessions) {
+              for (let session of this.sessions.data) {
+                if (session.id === sessionId) {
+                  session.expanded = true;
+                  this.stickySessions.push(session);
+                }
+              }
+            }
           }
 
           // initialize resizable columns now that there is data
@@ -1076,9 +1287,16 @@ export default {
     getField: function (fieldId) {
       for (let key in this.fields) {
         if (this.fields.hasOwnProperty(key)) {
-          let item = this.fields[key];
-          if (item.dbField === fieldId) {
-            return item;
+          let field = this.fields[key];
+          if (field.dbField === fieldId || field.exp === fieldId) {
+            return field;
+          }
+          if (field.aliases) {
+            for (let alias of field.aliases) {
+              if (alias === fieldId) {
+                return field;
+              }
+            }
           }
         }
       }
@@ -1088,12 +1306,11 @@ export default {
     /* Maps visible column headers to their corresponding fields */
     mapHeadersToFields: function () {
       this.headers = [];
-      this.sumOfColWidths = 80;
+      this.sumOfColWidths = 85;
 
       if (!this.colWidths) { this.colWidths = {}; }
 
-      for (let i = 0, len = this.tableState.visibleHeaders.length; i < len; ++i) {
-        let headerId = this.tableState.visibleHeaders[i];
+      for (let headerId of this.tableState.visibleHeaders) {
         let field = this.getField(headerId);
 
         if (field) {
@@ -1101,7 +1318,7 @@ export default {
           if (field.dbField === 'info') { // info column is super special
             // reset info field width to default so it can always be recalculated
             // to take up all of the rest of the space that it can
-            field.width = defaultInfoColWidth;
+            field.width = defaultColWidths['info'];
           } else { // don't account for info column's width because it changes
             this.sumOfColWidths += field.width;
           }
@@ -1111,7 +1328,7 @@ export default {
 
       this.sumOfColWidths = Math.round(this.sumOfColWidths);
 
-      this.calculateInfoColumnWidth(defaultInfoColWidth);
+      this.calculateInfoColumnWidth(defaultColWidths['info']);
     },
     /* Opens up to 10 session details in the table */
     openAll: function () {
@@ -1215,7 +1432,7 @@ export default {
     calculateInfoColumnWidth: function (infoColWidth) {
       this.showFitButton = false;
       if (!this.colWidths) { return; }
-      let windowWidth = window.innerWidth; // account for right and left margins
+      let windowWidth = window.innerWidth - 34; // account for right and left margins
       if (this.tableState.visibleHeaders.indexOf('info') >= 0) {
         let fillWithInfoCol = windowWidth - this.sumOfColWidths;
         let newTableWidth = this.sumOfColWidths;
@@ -1283,6 +1500,10 @@ export default {
   overflow: auto;
 }
 
+.info-vis-menu .dropdown-menu {
+  width: 360px;
+}
+
 /* small dropdown buttons in column headers */
 .moloch-col-header .btn-group button.btn {
   padding: 0 6px;
@@ -1290,6 +1511,11 @@ export default {
 .moloch-col-header .dropdown-menu {
   max-height: 250px;
   overflow: auto;
+}
+
+.moloch-col-header .btn-group:not(.info-vis-menu) {
+  visibility: hidden;
+  margin-left: -25px;
 }
 </style>
 
@@ -1315,7 +1541,6 @@ form.sessions-paging {
 
 .sessions-content {
   padding-top: 115px;
-  overflow-x: hidden;
   overflow-y: auto;
 }
 
@@ -1332,6 +1557,9 @@ table.sessions-table thead tr th {
   vertical-align: top;
   border-bottom: 2px solid var(--color-gray);
   border-right: 1px dotted var(--color-gray);
+}
+table.sessions-table thead tr th:last-child:not(.info-col-header) {
+  padding-right: 35px;
 }
 table.sessions-table thead tr th:first-child {
   border-right: none;
@@ -1378,11 +1606,6 @@ table.sessions-table tbody tr td {
   visibility: visible;
 }
 
-.moloch-col-header .btn-group {
-  visibility: hidden;
-  margin-left: -25px;
-}
-
 .moloch-col-header .header-text {
   display: inline-block;
   width: calc(100% - 24px);
@@ -1392,6 +1615,16 @@ table.sessions-table tbody tr td {
   display: inline-block;
   width: 8px;
   vertical-align: top;
+}
+
+.info-col-header .btn-group:not(.info-vis-menu) {
+  margin-right: 4px;
+}
+.info-vis-menu {
+  margin-right: 10px;
+}
+.moloch-col-header:not(:last-child) .info-vis-menu {
+  margin-right: 5px;
 }
 
 /* column visibility menu -------------------- */
@@ -1415,7 +1648,7 @@ table.sessions-table tbody tr td {
 button.fit-btn {
   position: absolute;
   top: 290px;
-  left: 5px;
+  left: 10px;
 }
 
 /* animate sticky sessions enter/leave */
@@ -1424,7 +1657,6 @@ button.fit-btn {
   top: 0;
   right: 0;
   bottom: 0;
-  width: 360px;
 }
 .leave-enter-active, .leave-leave-active {
   transition: all 0.5s ease;

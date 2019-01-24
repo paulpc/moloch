@@ -1,6 +1,6 @@
 <template>
 
-  <div class="parliament-404 container">
+  <div class="parliament-info container">
 
   <div class="center-area">
 
@@ -32,37 +32,3 @@ export default {
   name: 'Parliament404'
 };
 </script>
-
-<style scoped>
-.parliament-404 {
-  margin-top: 20px;
-}
-
-.parliament-404 .center-area > img {
-  z-index: 99;
-}
-
-.parliament-404 .center-area {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  flex-direction: column;
-  min-height: 75vh;
-}
-
-.parliament-404 .well {
-  margin-top: -6px;
-  min-width: 25%;
-  padding: 12px;
-  background-color: #F6F6F6;
-  border: 1px solid #EEEEEE;
-  border-radius: 3px;
-  box-shadow: 4px 4px 10px 0 rgba(0,0,0,0.5);
-}
-
-.parliament-404 .well > h1 {
-  margin-top: 0;
-  color: #DB0A65;
-}
-</style>

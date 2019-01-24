@@ -49,11 +49,11 @@ struct suricataitem_t {
     char           *category;
     uint32_t        severity;
     uint32_t        hash;
+    uint16_t        flow_id_len;
+    uint16_t        action_len;
+    uint16_t        signature_len;
+    uint16_t        category_len;
     char            ses;
-    char            flow_id_len;
-    char            action_len;
-    char            signature_len;
-    char            category_len;
 };
 
 #define SURICATA_HASH_SIZE 7919
@@ -262,7 +262,7 @@ LOCAL void suricata_process_alert(char *data, int len, SuricataItem_t *item)
         } else if (MATCH(data, "signature")) {
             item->signature = g_strndup(data + out[i+2], out[i+3]);
             item->signature_len = out[i+3];
-        } else if (MATCH(line, "severity")) {
+        } else if (MATCH(data, "severity")) {
             item->severity = atoi(data + out[i+2]);
         } else if (MATCH(data, "category")) {
             item->category = g_strndup(data + out[i+2], out[i+3]);
@@ -469,6 +469,7 @@ void moloch_plugin_init()
         LOGEXIT("No suricataAlertFile set");
 
     g_timeout_add_seconds(1, suricata_timer, 0);
+    suricata_timer(NULL);
 
     moloch_plugins_register("suricata", FALSE);
 

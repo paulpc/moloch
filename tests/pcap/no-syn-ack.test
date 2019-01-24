@@ -2,6 +2,7 @@
    "sessions2" : [
       {
          "body" : {
+            "communityId" : "1:HTQvCtcrl3Pf9bPrKCnqmVKZJ2E=",
             "dstBytes" : 152,
             "dstDataBytes" : 82,
             "dstIp" : "10.176.176.11",
@@ -18,6 +19,7 @@
             "dstPort" : 3306,
             "fileId" : [],
             "firstPacket" : 1482381409512,
+            "initRTT" : 0,
             "ipProtocol" : 6,
             "lastPacket" : 1482381409513,
             "length" : 0,
@@ -93,6 +95,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:XGELvpUclAKZTD2Zk30Ok0E1KZI=",
             "dstBytes" : 1582,
             "dstDataBytes" : 1460,
             "dstIp" : "10.13.13.13",
@@ -203,6 +206,7 @@
                ],
                "useragentCnt" : 1
             },
+            "initRTT" : 1,
             "ipProtocol" : 6,
             "lastPacket" : 1483544164045,
             "length" : 13,

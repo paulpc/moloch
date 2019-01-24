@@ -2,6 +2,7 @@
    "sessions2" : [
       {
          "body" : {
+            "communityId" : "1:J7FruyHnuDmNgU8FN557ZhCTNvw=",
             "dstASN" : "AS1668 AOL Transit Data Network",
             "dstBytes" : 1169,
             "dstDataBytes" : 485,
@@ -115,6 +116,7 @@
             },
             "fileId" : [],
             "firstPacket" : 1386358271061,
+            "initRTT" : 0,
             "ipProtocol" : 6,
             "lastPacket" : 1386358271580,
             "length" : 518,

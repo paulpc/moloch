@@ -8,7 +8,7 @@ ul.nav.nav-pills.mb-3
       a.nav-link(href=session.node + '/entirePcap/' + session.rootId + '.pcap', target="_blank") Download Entire Pcap
   else
     li.nav-item
-      a.nav-link(href=session.node + '/pcap/' + session.id + '.pcap', target="_blank") Download Pcap
+      a.nav-link(href=session.node + '/pcap/' + session.id + '.pcap', target="_blank", v-has-permission="'!disablePcapDownload'") Download Pcap
   li.nav-item
     a.nav-link(href=session.node + '/raw/' + session.id + '?type=src', target="_blank") Source Raw
   li.nav-item
@@ -16,7 +16,7 @@ ul.nav.nav-pills.mb-3
   li.nav-item
     a.nav-link.cursor-pointer(@click="openPermalink()") Permalink
   b-dropdown.nav-item(text="Actions", size="sm")
-    b-dropdown-item(@click="exportPCAP()")
+    b-dropdown-item(@click="exportPCAP()", v-has-permission="'!disablePcapDownload'")
       | Export PCAP
     b-dropdown-item(@click="addTags()")
       | Add Tags
@@ -29,20 +29,20 @@ ul.nav.nav-pills.mb-3
     b-dropdown-item(v-for="(value, key) in molochclusters", key="key", @click="sendSession(key)")
       | Send Session to {{ value.name }}
 
-div.form-container.mb-2
+div.mb-2.mr-5
   - var sessions = [{id: session.id}];
   div(v-if="form === 'add:tags'")
-    moloch-tag-sessions.form-container(:sessions=sessions, :add="true", :done="actionFormDone")
+    moloch-tag-sessions(:sessions=sessions, :add="true", :done="actionFormDone")
   div(v-if="form === 'remove:tags'")
-    moloch-tag-sessions.form-container(:sessions=sessions, :add="false", :done="actionFormDone")
+    moloch-tag-sessions(:sessions=sessions, :add="false", :done="actionFormDone")
   div(v-if="form === 'export:pcap'")
-    moloch-export-pcap.form-container(:sessions=sessions, :done="actionFormDone")
+    moloch-export-pcap(:sessions=sessions, :done="actionFormDone")
   div(v-if="form === 'scrub:pcap'")
-    moloch-scrub-pcap.form-container(:sessions=sessions, :done="actionFormDone")
+    moloch-scrub-pcap(:sessions=sessions, :done="actionFormDone")
   div(v-if="form === 'delete:session'")
-    moloch-delete-sessions.form-container(:sessions=sessions, :done="actionFormDone")
+    moloch-delete-sessions(:sessions=sessions, :done="actionFormDone")
   div(v-if="form === 'send:session'")
-    moloch-send-sessions.form-container(:sessions=sessions, :done="actionFormDone", :cluster="cluster")
+    moloch-send-sessions(:sessions=sessions, :done="actionFormDone", :cluster="cluster")
 
 div.mb-2
   moloch-toast(:message="message", :type="messageType", :done="messageDone")
@@ -54,6 +54,9 @@ dl
     if (session.rootId)
       strong.ml-4 Root Id:
       +clickableValue('rootId', session.rootId)
+    if (session.communityId)
+      strong.ml-4 Community Id:
+      +clickableValue('communityId', session.communityId)
 
   dt Time
   dd

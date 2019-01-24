@@ -21,10 +21,8 @@
 'use strict';
 
 var ESC            = require('elasticsearch'),
-    async          = require('async'),
     os             = require('os'),
-    fs             = require('fs'),
-    util           = require('util');
+    fs             = require('fs');
 
 var internals = {fileId2File: {},
                  fileName2File: {},
@@ -32,6 +30,8 @@ var internals = {fileId2File: {},
                  healthCache: {},
                  indicesCache: {},
                  usersCache: {},
+                 nodesStatsCache: {},
+                 nodesInfoCache: {},
                  qInProgress: 0,
                  apiVersion: "5.5",
                  q: []};
@@ -159,15 +159,23 @@ exports.search = function (index, type, query, options, cb) {
 };
 
 function searchScrollInternal(index, type, query, options, cb) {
+  let from = +query.from || 0;
+  let size = +query.size || 0;
+
+  let querySize = from + size;
+  delete query.from;
+
   var totalResults;
   var params = {scroll: '5m'};
   exports.merge(params, options);
-  var querySize = query.size;
   query.size = 1000; // Get 1000 items per scroll call
   exports.search(index, type, query, params,
     function getMoreUntilDone(error, response) {
       if (error) {
-          return cb(error, totalResults);
+        if (totalResults && from > 0) {
+          totalResults.hits.hits = totalResults.hits.hits.slice(from);
+        }
+        return cb(error, totalResults);
       }
 
       if (totalResults === undefined) {
@@ -184,7 +192,10 @@ function searchScrollInternal(index, type, query, options, cb) {
           }
         }, getMoreUntilDone);
       } else {
-          cb(error, totalResults);
+        if (totalResults && from > 0) {
+          totalResults.hits.hits = totalResults.hits.hits.slice(from);
+        }
+        return cb(null, totalResults);
       }
     });
 }
@@ -319,6 +330,10 @@ exports.shards = function(cb) {
   return internals.elasticSearchClient.cat.shards({format: "json", bytes: "b", h: "index,shard,prirep,state,docs,store,ip,node,ur,uf,fm,sm"}, cb);
 };
 
+exports.recovery = function(sortField, cb) {
+  return internals.elasticSearchClient.cat.recovery({format: "json", bytes: "b", s: sortField}, cb);
+};
+
 exports.getClusterSettings = function(options, cb) {
   return internals.elasticSearchClient.cluster.getSettings(options, cb);
 };
@@ -337,6 +352,10 @@ exports.taskCancel = function(taskId, cb) {
 
 exports.nodesStats = function (options, cb) {
   return internals.elasticSearchClient.nodes.stats(options, cb);
+};
+
+exports.nodesInfo = function (options, cb) {
+  return internals.elasticSearchClient.nodes.info(options, cb);
 };
 
 exports.update = function (index, type, id, document, options, cb) {
@@ -520,6 +539,42 @@ exports.healthCachePromise = function () {
   });
 };
 
+exports.nodesInfoCache = function () {
+  if (internals.nodesInfoCache._timeStamp !== undefined && internals.nodesInfoCache._timeStamp > Date.now() - 30000) {
+    return new Promise((resolve, reject) => {resolve(internals.nodesInfoCache);});
+  }
+
+  return new Promise((resolve, reject) => {
+    exports.nodesInfo((err, data) => {
+      if (err) {
+        reject(err);
+      } else {
+        internals.nodesInfoCache = data;
+        internals.nodesInfoCache._timeStamp = Date.now();
+        resolve(data);
+      }
+    });
+  });
+};
+
+exports.nodesStatsCache = function () {
+  if (internals.nodesStatsCache._timeStamp !== undefined && internals.nodesStatsCache._timeStamp > Date.now() - 2500) {
+    return new Promise((resolve, reject) => {resolve(internals.nodesStatsCache);});
+  }
+
+  return new Promise((resolve, reject) => {
+    exports.nodesStats({metric: 'jvm,process,fs,os,indices,thread_pool'}, (err, data) => {
+      if (err) {
+        reject(err);
+      } else {
+        internals.nodesStatsCache = data;
+        internals.nodesStatsCache._timeStamp = Date.now();
+        resolve(data);
+      }
+    });
+  });
+};
+
 exports.indicesCache = function (cb) {
   if (!cb) {
     return internals.indicesCache;
@@ -641,13 +696,11 @@ exports.updateFileSize = function (item, filesize) {
 exports.checkVersion = function(minVersion, checkUsers) {
   var match = process.versions.node.match(/^(\d+)\.(\d+)\.(\d+)/);
   var version = parseInt(match[1], 10)*10000 + parseInt(match[2], 10) * 100 + parseInt(match[3], 10);
-  if (version < 60000) {
-    console.log("ERROR - Need at least node 6.0.0, currently using", process.version);
+  if (version < 81200) {
+    console.log(`ERROR - Need at least node 8.12.0, currently using ${process.version}`);
     process.exit(1);
     throw new Error("Exiting");
   }
-
-  var index;
 
   ["stats", "dstats", "sequence", "files"].forEach((index) => {
     exports.indexStats(index, (err, status) => {
@@ -668,8 +721,11 @@ exports.checkVersion = function(minVersion, checkUsers) {
       var version = doc[fixIndex("sessions2_template")].mappings.session._meta.molochDbVersion;
 
       if (version < minVersion) {
-          console.log("ERROR - Current database version (" + version + ") is less then required version (" + minVersion + ") use 'db/db.pl <eshost:esport> upgrade' to upgrade");
-          process.exit(1);
+        console.log(`ERROR - Current database version (${version}) is less then required version (${minVersion}) use 'db/db.pl <eshost:esport> upgrade' to upgrade`);
+        if (doc._node) {
+          console.log(`On node ${doc._node}`);
+        }
+        process.exit(1);
       }
     } catch (e) {
       console.log("ERROR - Couldn't find database version.  Have you run ./db.pl host:port upgrade?");
@@ -791,6 +847,12 @@ exports.getIndices = function(startTime, stopTime, rotateIndex, cb) {
 
       startTime += offset;
 
+      if (aliases[iname] && (indices.length === 0 || iname !== indices[indices.length-1])) {
+        indices.push(iname);
+      }
+
+      // Check for shrink version
+      iname += '-shrink';
       if (aliases[iname] && (indices.length === 0 || iname !== indices[indices.length-1])) {
         indices.push(iname);
       }

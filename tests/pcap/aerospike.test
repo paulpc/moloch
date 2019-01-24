@@ -2,6 +2,7 @@
    "sessions2" : [
       {
          "body" : {
+            "communityId" : "1:hqeHY06nR5NH3ELRiceo1VcM3Fk=",
             "dstASN" : "AS0001 Cool Beans!",
             "dstBytes" : 198,
             "dstDataBytes" : 0,
@@ -20,6 +21,7 @@
             "dstRIR" : "TEST",
             "fileId" : [],
             "firstPacket" : 1466097898472,
+            "initRTT" : 1,
             "ipProtocol" : 6,
             "lastPacket" : 1466097973153,
             "length" : 74681,
@@ -125,6 +127,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:2ymV9tUsaCl3adnJMWUN+YlTL6k=",
             "dstASN" : "AS0002 Hmm!@#$%^&*()",
             "dstBytes" : 444,
             "dstDataBytes" : 86,
@@ -143,6 +146,7 @@
             "dstPort" : 3000,
             "fileId" : [],
             "firstPacket" : 1466101718441,
+            "initRTT" : 1,
             "ipProtocol" : 6,
             "lastPacket" : 1466101718908,
             "length" : 467,

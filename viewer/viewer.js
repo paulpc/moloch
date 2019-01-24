@@ -17,7 +17,7 @@
  */
 'use strict';
 
-var MIN_DB_VERSION = 53;
+var MIN_DB_VERSION = 57;
 
 //// Modules
 //////////////////////////////////////////////////////////////////////////////////
@@ -31,14 +31,10 @@ var Config         = require('./config.js'),
     url            = require('url'),
     dns            = require('dns'),
     Pcap           = require('./pcap.js'),
-    sprintf        = require('./public/sprintf.js'),
     Db             = require('./db.js'),
-    os             = require('os'),
-    zlib           = require('zlib'),
     molochparser   = require('./molochparser.js'),
     passport       = require('passport'),
     DigestStrategy = require('passport-http').DigestStrategy,
-    HTTPParser     = process.binding('http_parser').HTTPParser,
     molochversion  = require('./version'),
     http           = require('http'),
     pug            = require('pug'),
@@ -46,7 +42,8 @@ var Config         = require('./config.js'),
     EventEmitter   = require('events').EventEmitter,
     PNG            = require('pngjs').PNG,
     decode         = require('./decode.js'),
-    onHeaders      = require('on-headers');
+    onHeaders      = require('on-headers'),
+    glob           = require('glob');
 } catch (e) {
   console.log ("ERROR - Couldn't load some dependancies, maybe need to 'npm update' inside viewer directory", e);
   process.exit(1);
@@ -68,13 +65,14 @@ var internals = {
   userNameHeader: Config.get("userNameHeader"),
   httpAgent:   new http.Agent({keepAlive: true, keepAliveMsecs:5000, maxSockets: 40}),
   httpsAgent:  new https.Agent({keepAlive: true, keepAliveMsecs:5000, maxSockets: 40, rejectUnauthorized: !Config.insecure}),
-  previousNodeStats: [],
+  previousNodesStats: [],
   caTrustCerts: {},
   cronRunning: false,
   rightClicks: {},
   pluginEmitter: new EventEmitter(),
   writers: {},
   oldDBFields: {},
+  isLocalViewRegExp: Config.get("isLocalViewRegExp")?new RegExp(Config.get("isLocalViewRegExp")):undefined,
 
   cronTimeout: +Config.get("dbFlushTimeout", 5) + // How long capture holds items
                60 +                               // How long before ES reindexs
@@ -84,7 +82,8 @@ var internals = {
   emptyPNG: new Buffer("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==", 'base64'),
   PNG_LINE_WIDTH: 256,
   runningHuntJob: undefined,
-  proccessHuntJobsInitialized: false
+  proccessHuntJobsInitialized: false,
+  notifiers: undefined
 };
 
 if (internals.elasticBase[0].lastIndexOf('http', 0) !== 0) {
@@ -190,8 +189,8 @@ if (Config.get("passwordSecret")) {
       return res.end();
     }
 
-    // No auth for stats.json, dstats.json, esstats.json, eshealth.json
-    if (req.url.match(/^\/([e]*[ds]*stats|eshealth).json/)) {
+    // No auth for eshealth.json or parliament.json
+    if (req.url.match(/^\/(parliament|eshealth).json/)) {
       return next();
     }
 
@@ -373,13 +372,8 @@ function loadPlugins() {
 //////////////////////////////////////////////////////////////////////////////////
 //// Utility
 //////////////////////////////////////////////////////////////////////////////////
-function isEmptyObject(object) { for(var i in object) { return false; } return true; }
 function safeStr(str) {
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/\'/g, '&#39;').replace(/\//g, '&#47;');
-}
-
-function twoDigitString(value) {
-  return (value < 10) ? ("0" + value) : value.toString();
 }
 
 function queryValueToArray(val) {
@@ -410,11 +404,6 @@ function errorString(err, result) {
   } else {
     return "Elasticsearch error: " + str;
   }
-}
-
-// http://stackoverflow.com/a/10934946
-function dot2value(obj, str) {
-      return str.split(".").reduce(function(o, x) { return o[x]; }, obj);
 }
 
 function parseCustomView(key, input) {
@@ -668,7 +657,7 @@ function proxyRequest (req, res, errCb) {
         return errCb(err);
       }
       console.log("ERROR - getViewUrl - node:", req.params.nodeName, "err:", err);
-      return res.send(`Can't find view url for '${req.params.nodeName}' check viewer logs on '${Config.hostName()}'`);
+      return res.send(`Can't find view url for '${safeStr(req.params.nodeName)}' check viewer logs on '${Config.hostName()}'`);
     }
     var info = url.parse(viewUrl);
     info.path = req.url;
@@ -696,7 +685,7 @@ function proxyRequest (req, res, errCb) {
         return errCb(e);
       }
       console.log("ERROR - Couldn't proxy request=", info, "\nerror=", e);
-      res.send(`Error talking to node '${req.params.nodeName}' using host '${info.host}' check viewer logs on '${Config.hostName()}'`);
+      res.send(`Error talking to node '${safeStr(req.params.nodeName)}' using host '${info.host}' check viewer logs on '${Config.hostName()}'`);
     });
     preq.end();
   });
@@ -727,6 +716,10 @@ function makeRequest (node, path, user, cb) {
 }
 
 function isLocalView (node, yesCb, noCb) {
+  if (internals.isLocalViewRegExp && node.match(internals.isLocalViewRegExp)) {
+    return yesCb();
+  }
+
   var pcapWriteMethod = Config.getFull(node, "pcapWriteMethod");
   var writer = internals.writers[pcapWriteMethod];
   if (writer && writer.localNode === false) {
@@ -754,7 +747,7 @@ function checkCookieToken(req, res, next) {
 
   req.token = Config.auth2obj(req.headers['x-moloch-cookie']);
   var diff = Math.abs(Date.now() - req.token.date);
-  if (diff > 2400000 || req.token.pid !== process.pid ||
+  if (diff > 2400000 || /* req.token.pid !== process.pid || */
       req.token.userId !== req.user.userId) {
 
     console.trace('bad token', req.token);
@@ -790,6 +783,12 @@ function checkHuntAccess (req, res, next) {
       return res.molochError(403, 'You cannot change another user\'s hunt unless you have admin privileges');
     });
   }
+}
+
+function noCacheJson(req, res, next) {
+  res.header('Cache-Control', 'no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0');
+  res.setHeader("Content-Type", 'application/json');
+  return next();
 }
 
 function logAction(uiPage) {
@@ -903,16 +902,6 @@ if (Config.get('demoMode', false)) {
   });
 }
 
-function makeTitle(req, page) {
-  var title = Config.get("titleTemplate", "_cluster_ - _page_ _-view_ _-expression_");
-  title = title.replace(/_cluster_/g, internals.clusterName)
-               .replace(/_page_/g, page)
-               .replace(/_userId_/g, req.user?req.user.userId:"-")
-               .replace(/_userName_/g, req.user?req.user.userName:"-")
-               ;
-  return title;
-}
-
 app.get(['/', '/app'], function(req, res) {
   var question = req.url.indexOf("?");
   if (question === -1) {
@@ -1022,12 +1011,12 @@ app.get('/user.css', function(req, res) {
 
 /* User Endpoints ---------------------------------------------------------- */
 // default settings for users with no settings
-var settingDefaults = {
+let settingDefaults = {
   timezone      : 'local',
   detailFormat  : 'last',
   showTimestamps: 'last',
   sortColumn    : 'firstPacket',
-  sortDirection : 'asc',
+  sortDirection : 'desc',
   spiGraph      : 'node',
   connSrcField  : 'srcIp',
   connDstField  : 'ip.dst:port',
@@ -1038,10 +1027,11 @@ var settingDefaults = {
 // gets the current user
 app.get('/user/current', function(req, res) {
 
-  var userProps = ['createEnabled', 'emailSearch', 'enabled', 'removeEnabled',
-    'headerAuthEnabled', 'settings', 'userId', 'webEnabled', 'packetSearch'];
+  let userProps = ['createEnabled', 'emailSearch', 'enabled', 'removeEnabled',
+    'headerAuthEnabled', 'settings', 'userId', 'webEnabled', 'packetSearch',
+    'hideStats', 'hideFiles', 'hidePcap', 'disablePcapDownload'];
 
-  var clone     = {};
+  let clone = {};
 
   for (let i = 0, ilen = userProps.length; i < ilen; ++i) {
     var prop = userProps[i];
@@ -1053,11 +1043,13 @@ app.get('/user/current', function(req, res) {
   clone.canUpload = app.locals.allowUploads;
 
   // If no settings, use defaults
-  if (clone.settings === undefined) {clone.settings = settingDefaults;}
+  if (clone.settings === undefined) { clone.settings = settingDefaults; }
 
   // Use settingsDefaults for any settings that are missing
   for (let item in settingDefaults) {
-    if (clone.settings[item] === undefined) {clone.settings[item] = settingDefaults[item];}
+    if (clone.settings[item] === undefined) {
+      clone.settings[item] = settingDefaults[item];
+    }
   }
 
   return res.send(clone);
@@ -1117,6 +1109,332 @@ function postSettingUser (req, res, next) {
   });
 }
 
+function buildNotifiers () {
+  internals.notifiers = {};
+
+  let api = {
+    register: function (str, info) {
+      internals.notifiers[str] = info;
+    }
+  };
+
+  // look for all notifier providers and initialize them
+  let files = glob.sync(`${__dirname}/../notifiers/provider.*.js`);
+  files.forEach((file) => {
+    let plugin = require(file);
+    plugin.init(api);
+  });
+}
+
+function issueAlert (notifierName, alertMessage, continueProcess) {
+  if (!internals.notifiers) { buildNotifiers(); }
+
+  // find notifier
+  Db.getUser('_moloch_shared', (err, sharedUser) => {
+    if (!sharedUser || !sharedUser.found) {
+      console.log('Cannot find notifier, no alert can be issued');
+      return continueProcess();
+    }
+
+    sharedUser = sharedUser._source;
+
+    sharedUser.notifiers = sharedUser.notifiers || {};
+
+    let notifier = sharedUser.notifiers[notifierName];
+
+    if (!notifier) {
+      console.log('Cannot find notifier, no alert can be issued');
+      return continueProcess();
+    }
+
+    let notifierDefinition;
+    for (let n in internals.notifiers) {
+      if (internals.notifiers[n].type === notifier.type) {
+        notifierDefinition = internals.notifiers[n];
+      }
+    }
+    if (!notifierDefinition) {
+      console.log('Cannot find notifier definition, no alert can be issued');
+      return continueProcess();
+    }
+
+    let config = {};
+    // check that required notifier fields exist
+    for (let field of notifierDefinition.fields) {
+      if (field.required) {
+        for (let configuredField of notifier.fields) {
+          if (configuredField.name === field.name && !configuredField.value) {
+            console.log(`Cannot find notifier field value: ${field.name}, no alert can be issued`);
+            continueProcess();
+          }
+          config[field.name] = configuredField.value;
+        }
+      }
+    }
+
+    notifierDefinition.sendAlert(config, alertMessage);
+
+    return continueProcess();
+  });
+}
+
+app.get('/notifierTypes', checkCookieToken, function (req, res) {
+  if (internals.notifiers) {
+    return res.send(internals.notifiers);
+  }
+
+  buildNotifiers();
+
+  return res.send(internals.notifiers);
+});
+
+// get created notifiers
+app.get('/notifiers', checkCookieToken, function (req, res) {
+  Db.getUser('_moloch_shared', (err, sharedUser) => {
+    if (!sharedUser || !sharedUser.found) {
+      return res.send({});
+    } else {
+      sharedUser = sharedUser._source;
+    }
+
+    return res.send(sharedUser.notifiers);
+  });
+});
+
+// create a new notifier
+app.post('/notifiers', getSettingUser, checkCookieToken, function (req, res) {
+  let user = req.settingUser;
+  if (!user.createEnabled) {
+    return res.molochError(401, 'Need admin privelages to create a notifier');
+  }
+
+  if (!req.body.notifier) {
+    return res.molochError(403, 'Missing notifier');
+  }
+
+  if (!req.body.notifier.name) {
+    return res.molochError(403, 'Missing a unique notifier name');
+  }
+
+  if (!req.body.notifier.type) {
+    return res.molochError(403, 'Missing notifier type');
+  }
+
+  if (!req.body.notifier.fields) {
+    return res.molochError(403, 'Missing notifier fields');
+  }
+
+  if (!Array.isArray(req.body.notifier.fields)) {
+    return res.molochError(403, 'Notifier fields must be an array');
+  }
+
+  req.body.notifier.name = req.body.notifier.name.replace(/[^-a-zA-Z0-9_: ]/g, '');
+
+  if (!internals.notifiers) { buildNotifiers(); }
+
+  let foundNotifier;
+  for (let n in internals.notifiers) {
+    let notifier = internals.notifiers[n];
+    if (notifier.type === req.body.notifier.type) {
+      foundNotifier = notifier;
+    }
+  }
+
+  if (!foundNotifier) { return res.molochError(403, 'Unknown notifier type'); }
+
+  // check that required notifier fields exist
+  for (let field of foundNotifier.fields) {
+    if (field.required) {
+      for (let sentField of req.body.notifier.fields) {
+        if (sentField.name === field.name && !sentField.value) {
+          return res.molochError(403, `Missing a value for ${field.name}`);
+        }
+      }
+    }
+  }
+
+  // save the notifier on the shared user
+  Db.getUser('_moloch_shared', (err, sharedUser) => {
+    if (!sharedUser || !sharedUser.found) {
+      // sharing for the first time
+      sharedUser = {
+        userId: '_moloch_shared',
+        userName: '_moloch_shared',
+        enabled: false,
+        webEnabled: false,
+        emailSearch: false,
+        headerAuthEnabled: false,
+        createEnabled: false,
+        removeEnabled: false,
+        packetSearch: false,
+        views: {},
+        notifiers: {}
+      };
+    } else {
+      sharedUser = sharedUser._source;
+    }
+
+    sharedUser.notifiers = sharedUser.notifiers || {};
+
+    if (sharedUser.notifiers[req.body.notifier.name]) {
+      console.log('Trying to add duplicate notifier', sharedUser);
+      return res.molochError(403, 'Notifier already exists');
+    }
+
+    sharedUser.notifiers[req.body.notifier.name] = req.body.notifier;
+
+    Db.setUser('_moloch_shared', sharedUser, (err, info) => {
+      if (err) {
+        console.log('/notifiers failed', err, info);
+        return res.molochError(500, 'Creating notifier failed');
+      }
+      return res.send(JSON.stringify({
+        success : true,
+        text    : 'Successfully created notifier',
+        name    : req.body.notifier.name
+      }));
+    });
+  });
+});
+
+// update a notifier
+app.put('/notifiers/:name', getSettingUser, checkCookieToken, function (req, res) {
+  let user = req.settingUser;
+  if (!user.createEnabled) {
+    return res.molochError(401, 'Need admin privelages to update a notifier');
+  }
+
+  Db.getUser('_moloch_shared', (err, sharedUser) => {
+    if (!sharedUser || !sharedUser.found) {
+      return res.molochError(404, 'Cannot find notifer to udpate');
+    } else {
+      sharedUser = sharedUser._source;
+    }
+
+    sharedUser.notifiers = sharedUser.notifiers || {};
+
+    if (!sharedUser.notifiers[req.params.name]) {
+      return res.molochError(404, 'Cannot find notifer to udpate');
+    }
+
+    if (!req.body.notifier) {
+      return res.molochError(403, 'Missing notifier');
+    }
+
+    if (!req.body.notifier.name) {
+      return res.molochError(403, 'Missing a unique notifier name');
+    }
+
+    if (!req.body.notifier.type) {
+      return res.molochError(403, 'Missing notifier type');
+    }
+
+    if (!req.body.notifier.fields) {
+      return res.molochError(403, 'Missing notifier fields');
+    }
+
+    if (!Array.isArray(req.body.notifier.fields)) {
+      return res.molochError(403, 'Notifier fields must be an array');
+    }
+
+    req.body.notifier.name = req.body.notifier.name.replace(/[^-a-zA-Z0-9_: ]/g, '');
+
+    if (!internals.notifiers) { buildNotifiers(); }
+
+    let foundNotifier;
+    for (let n in internals.notifiers) {
+      let notifier = internals.notifiers[n];
+      if (notifier.type === req.body.notifier.type) {
+        foundNotifier = notifier;
+      }
+    }
+
+    if (!foundNotifier) { return res.molochError(403, 'Unknown notifier type'); }
+
+    // check that required notifier fields exist
+    for (let field of foundNotifier.fields) {
+      if (field.required) {
+        for (let sentField of req.body.notifier.fields) {
+          if (sentField.name === field.name && !sentField.value) {
+            return res.molochError(403, `Missing a value for ${field.name}`);
+          }
+        }
+      }
+    }
+
+    sharedUser.notifiers[req.body.notifier.name] = req.body.notifier;
+    // delete the old notifier if the name has changed
+    if (sharedUser.notifiers[req.params.name] && req.body.notifier.name !== req.params.name) {
+      sharedUser.notifiers[req.params.name] = null;
+      delete sharedUser.notifiers[req.params.name];
+    }
+
+    Db.setUser('_moloch_shared', sharedUser, (err, info) => {
+      if (err) {
+        console.log('/notifiers update failed', err, info);
+        return res.molochError(500, 'Updating notifier failed');
+      }
+      return res.send(JSON.stringify({
+        success : true,
+        text    : 'Successfully updated notifier',
+        name    : req.body.notifier.name
+      }));
+    });
+  });
+});
+
+// delete a notifier
+app.delete('/notifiers/:name', getSettingUser, checkCookieToken, function (req, res) {
+  let user = req.settingUser;
+  if (!user.createEnabled) {
+    return res.molochError(401, 'Need admin privelages to delete a notifier');
+  }
+
+  Db.getUser('_moloch_shared', (err, sharedUser) => {
+    if (!sharedUser || !sharedUser.found) {
+      return res.molochError(404, 'Cannot find notifer to remove');
+    } else {
+      sharedUser = sharedUser._source;
+    }
+
+    sharedUser.notifiers = sharedUser.notifiers || {};
+
+    if (!sharedUser.notifiers[req.params.name]) {
+      return res.molochError(404, 'Cannot find notifer to remove');
+    }
+
+    sharedUser.notifiers[req.params.name] = undefined;
+
+    Db.setUser('_moloch_shared', sharedUser, (err, info) => {
+      if (err) {
+        console.log('/notifiers delete failed', err, info);
+        return res.molochError(500, 'Deleting notifier failed');
+      }
+      return res.send(JSON.stringify({
+        success : true,
+        text    : 'Successfully deleted notifier',
+        name    : req.params.name
+      }));
+    });
+  });
+});
+
+// test a notifier
+app.post('/notifiers/:name/test', getSettingUser, checkCookieToken, function (req, res) {
+  let user = req.settingUser;
+  if (!user.createEnabled) {
+    return res.molochError(401, 'Need admin privelages to test a notifier');
+  }
+
+  function continueProcess () {
+    return res.send(JSON.stringify({
+      success : true,
+      text    : `Successfully issued alert using the ${req.params.name} notifier.`
+    }));
+  }
+
+  issueAlert(req.params.name, 'Test alert', continueProcess);
+});
 
 // gets a user's settings
 app.get('/user/settings', getSettingUser, recordResponseTime, function(req, res) {
@@ -1447,7 +1765,7 @@ app.post('/user/views/update', [checkCookieToken, logAction(), postSettingUser, 
       if (sharedUser && sharedUser.found) {
         sharedUser = sharedUser._source;
         sharedUser.views = sharedUser.views || {};
-        if (sharedUser.views[req.body.name] === undefined) { return res.molochError(404, 'View not found'); }
+        if (sharedUser.views[req.body.key] === undefined) { return res.molochError(404, 'View not found'); }
         // only admins or the user that created the view can update the shared view
         if (!user.createEnabled && sharedUser.views[req.body.name].user !== user.userId) {
           return res.molochError(401, 'Need admin privelages to update another user\'s shared view');
@@ -1546,9 +1864,13 @@ app.post('/user/cron/create', [checkCookieToken, logAction(), postSettingUser], 
       name    : req.body.name,
       query   : req.body.query,
       tags    : req.body.tags,
-      action  : req.body.action
+      action  : req.body.action,
     }
   };
+
+  if (req.body.notifier) {
+    document.doc.notifier = req.body.notifier;
+  }
 
   var userId = req.settingUser.userId;
 
@@ -1619,9 +1941,14 @@ app.post('/user/cron/update', [checkCookieToken, logAction(), postSettingUser], 
       name    : req.body.name,
       query   : req.body.query,
       tags    : req.body.tags,
-      action  : req.body.action
+      action  : req.body.action,
+      notifier: undefined
     }
   };
+
+  if (req.body.notifier) {
+    document.doc.notifier = req.body.notifier;
+  }
 
   Db.get('queries', 'query', req.body.key, function(err, sq) {
     if (err || !sq.found) {
@@ -2206,8 +2533,6 @@ function lookupQueryItems(query, doneCb) {
 
 function buildSessionQuery(req, buildCb) {
   var limit = Math.min(2000000, +req.query.length || +req.query.iDisplayLength || 100);
-  var i;
-
 
   var query = {from: req.query.start || req.query.iDisplayStart || 0,
                size: limit,
@@ -2502,14 +2827,15 @@ function sessionsListFromQuery(req, res, fields, cb) {
 }
 
 function sessionsListFromIds(req, ids, fields, cb) {
+  var processSegments = false;
+  if (req && ((req.query.segments && req.query.segments.match(/^(time|all)$/)) || (req.body.segments && req.body.segments.match(/^(time|all)$/)))) {
+    if (fields.indexOf("rootId") === -1) { fields.push("rootId"); }
+    processSegments = true;
+  }
+
   var list = [];
   var nonArrayFields = ["ipProtocol", "firstPacket", "lastPacket", "srcIp", "srcPort", "srcGEO", "dstIp", "dstPort", "dstGEO", "totBytes", "totDataBytes", "totPackets", "node", "rootId"];
   var fixFields = nonArrayFields.filter(function(x) {return fields.indexOf(x) !== -1;});
-
-  // ES treats _source=no as turning off _source, very sad :(
-  if (fields.length === 1 && fields[0] === "node") {
-    fields.push("lastPacket");
-  }
 
   async.eachLimit(ids, 10, function(id, nextCb) {
     Db.getWithOptions(Db.sid2Index(id), 'session', Db.sid2Id(id), {_source: fields.join(",")}, function(err, session) {
@@ -2528,7 +2854,7 @@ function sessionsListFromIds(req, ids, fields, cb) {
       nextCb(null);
     });
   }, function(err) {
-    if (req && req.query.segments && req.query.segments.match(/^(time|all)$/)) {
+    if (processSegments) {
       buildSessionQuery(req, function(err, query, indices) {
         query._source = fields;
         sessionsListAddSegments(req, indices, query, list, function(err, list) {
@@ -2680,6 +3006,8 @@ app.get('/fields', function(req, res) {
 });
 
 app.get('/file/list', logAction('files'), recordResponseTime, function(req, res) {
+  if (req.user.hideFiles) { return res.molochError(403, 'Need permission to view files'); }
+
   var columns = ["num", "node", "name", "locked", "first", "filesize"];
 
   var query = {_source: columns,
@@ -2740,13 +3068,15 @@ app.get('/molochRightClick', checkWebEnabled, function(req, res) {
   res.send(app.locals.molochRightClick);
 });
 
-app.get('/eshealth.json', function(req, res) {
+app.get('/eshealth.json', noCacheJson, function(req, res) {
   Db.healthCache(function(err, health) {
     res.send(health);
   });
 });
 
 app.get('/esindices/list', recordResponseTime, function(req, res) {
+  if (req.user.hideStats) { return res.molochError(403, 'Need permission to view stats'); }
+
   Db.indicesCache(function(err, indices) {
     // Implement filtering
     if (req.query.filter !== undefined) {
@@ -2812,6 +3142,8 @@ app.post('/esindices/:index/optimize', logAction(), checkCookieToken, function(r
 });
 
 app.get('/estask/list', recordResponseTime, function(req, res) {
+  if (req.user.hideStats) { return res.molochError(403, 'Need permission to view stats'); }
+
   Db.tasks(function(err, tasks) {
     tasks = tasks.tasks;
 
@@ -2875,6 +3207,8 @@ app.post('/estask/cancel', logAction(), function(req, res) {
 });
 
 app.get('/esshard/list', recordResponseTime, function(req, res) {
+  if (req.user.hideStats) { return res.molochError(403, 'Need permission to view stats'); }
+
   Promise.all([Db.shards(),
                Db.getClusterSettings({flatSettings: true})
               ]).then(([shards, settings]) => {
@@ -2891,7 +3225,7 @@ app.get('/esshard/list', recordResponseTime, function(req, res) {
 
     var regex;
     if (req.query.filter !== undefined) {
-      regex = new RegExp(req.query.filter);
+      regex = new RegExp(req.query.filter.toLowerCase());
     }
 
     let result = {};
@@ -2900,7 +3234,13 @@ app.get('/esshard/list', recordResponseTime, function(req, res) {
     for (var shard of shards) {
       if (shard.node === null || shard.node === "null") { shard.node = "Unassigned"; }
 
-      if (regex && !shard.index.match(regex) && !shard.node.match(regex)) { continue; }
+      if (! (req.query.show === 'all' ||
+            shard.state === req.query.show ||    //  Show only matching stage
+            (shard.state !== 'STARTED' && req.query.show === 'notstarted'))) {
+        continue;
+      }
+
+      if (regex && !shard.index.toLowerCase().match(regex) && !shard.node.toLowerCase().match(regex)) { continue; }
 
       if (result[shard.index] === undefined) {
         result[shard.index] = {name: shard.index, nodes: {}};
@@ -2930,7 +3270,6 @@ app.get('/esshard/list', recordResponseTime, function(req, res) {
         return a.name.localeCompare(b.name);
       });
     }
-
     res.send({nodes: nodes, indices: indices, nodeExcludes: nodeExcludes, ipExcludes: ipExcludes});
   });
 });
@@ -3002,15 +3341,48 @@ app.post('/esshard/include/:type/:value', logAction(), checkCookieToken, functio
   });
 });
 
-app.get('/esstats.json', recordResponseTime, function(req, res) {
+app.get('/esrecovery/list', recordResponseTime, function(req, res) {
+  if (req.user.hideStats) { return res.molochError(403, 'Need permission to view stats'); }
+
+  var sortField = (req.query.sortField || "index") + (req.query.desc === "true"?":desc":"");
+
+  Promise.all([Db.recovery(sortField)]).then(([recoveries]) => {
+
+    var regex;
+    if (req.query.filter !== undefined) {
+      regex = new RegExp(req.query.filter);
+    }
+
+    let result = [];
+
+    for (var recovery of recoveries) {
+      if (! (req.query.show === 'all' ||
+            recovery.stage === req.query.show ||    //  Show only matching stage
+            (recovery.stage !== 'done' && req.query.show === 'notdone'))) {
+        continue;
+      }
+
+      if (regex && !recovery.index.match(regex) && !recovery.target_node.match(regex) && !recovery.source_node.match(regex)) { continue; }
+
+      result.push(recovery);
+    }
+
+    res.send(result);
+  });
+});
+
+app.get('/esstats.json', recordResponseTime, noCacheJson, function(req, res) {
+  if (req.user.hideStats) { return res.molochError(403, 'Need permission to view stats'); }
+
   var stats = [];
   var r;
 
-  Promise.all([Db.nodesStats({metric: "jvm,process,fs,os,indices"}),
+  Promise.all([Db.nodesStatsCache(),
+               Db.nodesInfoCache(),
                Db.healthCachePromise(),
                Db.getClusterSettings({flatSettings: true})
              ])
-  .then(([nodes, health, settings]) => {
+  .then(([nodesStats, nodesInfo, health, settings]) => {
     let ipExcludes = [];
     if (settings.persistent['cluster.routing.allocation.exclude._ip']) {
       ipExcludes = settings.persistent['cluster.routing.allocation.exclude._ip'].split(',');
@@ -3022,8 +3394,8 @@ app.get('/esstats.json', recordResponseTime, function(req, res) {
     }
 
     var now = new Date().getTime();
-    while (internals.previousNodeStats.length > 1 && internals.previousNodeStats[1].timestamp + 10000 < now) {
-      internals.previousNodeStats.shift();
+    while (internals.previousNodesStats.length > 1 && internals.previousNodesStats[1].timestamp + 10000 < now) {
+      internals.previousNodesStats.shift();
     }
 
     var regex;
@@ -3031,23 +3403,39 @@ app.get('/esstats.json', recordResponseTime, function(req, res) {
       regex = new RegExp(req.query.filter);
     }
 
-    var nodeKeys = Object.keys(nodes.nodes);
+    var nodeKeys = Object.keys(nodesStats.nodes);
     for (var n = 0, nlen = nodeKeys.length; n < nlen; n++) {
-      var node = nodes.nodes[nodeKeys[n]];
+      var node = nodesStats.nodes[nodeKeys[n]];
 
-      if (regex && !node.name.match(regex)) {continue;}
+      if (nodeKeys[n] === 'timestamp' || (regex && !node.name.match(regex))) {continue;}
 
-      var read = 0;
-      var write = 0;
+      let read = 0;
+      let write = 0;
+      let rejected = 0;
+      let completed = 0;
 
-      var oldnode = internals.previousNodeStats[0][nodeKeys[n]];
+      let writeInfo = node.thread_pool.bulk || node.thread_pool.write;
+
+      var oldnode = internals.previousNodesStats[0][nodeKeys[n]];
       if (oldnode !== undefined && node.fs.io_stats !== undefined && oldnode.fs.io_stats !== undefined && "total" in node.fs.io_stats) {
         var timediffsec = (node.timestamp - oldnode.timestamp)/1000.0;
-        read = Math.ceil((node.fs.io_stats.total.read_kilobytes - oldnode.fs.io_stats.total.read_kilobytes)/timediffsec*1024);
-        write = Math.ceil((node.fs.io_stats.total.write_kilobytes - oldnode.fs.io_stats.total.write_kilobytes)/timediffsec*1024);
+        read = Math.max(0, Math.ceil((node.fs.io_stats.total.read_kilobytes - oldnode.fs.io_stats.total.read_kilobytes)/timediffsec*1024));
+        write = Math.max(0, Math.ceil((node.fs.io_stats.total.write_kilobytes - oldnode.fs.io_stats.total.write_kilobytes)/timediffsec*1024));
+
+        let writeInfoOld = oldnode.thread_pool.bulk || oldnode.thread_pool.write;
+
+        completed = Math.max(0, Math.ceil((writeInfo.completed - writeInfoOld.completed)/timediffsec*1024));
+        rejected = Math.max(0, Math.ceil((writeInfo.rejected - writeInfoOld.rejected)/timediffsec*1024));
       }
 
       var ip = (node.ip?node.ip.split(":")[0]:node.host);
+
+      let threadpoolInfo;
+      if (nodesInfo.nodes[nodeKeys[n]]) {
+        threadpoolInfo = nodesInfo.nodes[nodeKeys[n]].thread_pool.bulk || nodesInfo.nodes[nodeKeys[n]].thread_pool.write;
+      } else {
+        threadpoolInfo = {queue_size: 0};
+      }
 
       stats.push({
         name: node.name,
@@ -3064,6 +3452,11 @@ app.get('/esstats.json', recordResponseTime, function(req, res) {
         cpu: node.process.cpu.percent,
         read: read,
         write: write,
+        writesRejected: writeInfo.rejected,
+        writesCompleted: writeInfo.completed,
+        writesRejectedDelta: rejected,
+        writesCompletedDelta: completed,
+        writesQueueSize: threadpoolInfo.queue_size,
         load: node.os.load_average !== undefined ? /* ES 2*/ node.os.load_average : /*ES 5*/ node.os.cpu.load_average["5m"]
       });
     }
@@ -3085,8 +3478,8 @@ app.get('/esstats.json', recordResponseTime, function(req, res) {
       }
     }
 
-    nodes.nodes.timestamp = new Date().getTime();
-    internals.previousNodeStats.push(nodes.nodes);
+    nodesStats.nodes.timestamp = new Date().getTime();
+    internals.previousNodesStats.push(nodesStats.nodes);
 
     r = {health: health,
          recordsTotal: stats.length,
@@ -3112,8 +3505,57 @@ function mergeUnarray(to, from) {
     }
   }
 }
-app.get('/stats.json', recordResponseTime, function(req, res) {
-  noCache(req, res);
+
+app.get('/parliament.json', noCacheJson, function (req, res) {
+  let query = {
+    size: 500,
+    _source: [
+      'ver', 'nodeName', 'currentTime', 'monitoring', 'deltaBytes', 'deltaPackets', 'deltaMS',
+      'deltaESDropped', 'deltaDropped', 'deltaOverloadDropped'
+    ]
+  };
+
+  Promise.all([Db.search('stats', 'stat', query), Db.numberOfDocuments('stats')])
+    .then(([stats, total]) => {
+      if (stats.error) { throw stats.error; }
+
+      let results = { total: stats.hits.total, results: [] };
+
+      for (let i = 0, ilen = stats.hits.hits.length; i < ilen; i++) {
+        let fields = stats.hits.hits[i]._source || stats.hits.hits[i].fields;
+
+        if (stats.hits.hits[i]._source) {
+          mergeUnarray(fields, stats.hits.hits[i].fields);
+        }
+        fields.id = stats.hits.hits[i]._id;
+
+        // make sure necessary fields are not undefined
+        let keys = [ 'deltaOverloadDropped', 'monitoring', 'deltaESDropped' ];
+        for (const key of keys) {
+          fields[key] = fields[key] || 0;
+        }
+
+        fields.deltaBytesPerSec         = Math.floor(fields.deltaBytes * 1000.0/fields.deltaMS);
+        fields.deltaPacketsPerSec       = Math.floor(fields.deltaPackets * 1000.0/fields.deltaMS);
+        fields.deltaESDroppedPerSec     = Math.floor(fields.deltaESDropped * 1000.0/fields.deltaMS);
+        fields.deltaTotalDroppedPerSec  = Math.floor((fields.deltaDropped + fields.deltaOverloadDropped) * 1000.0/fields.deltaMS);
+
+        results.results.push(fields);
+      }
+
+      res.send({
+        data: results.results,
+        recordsTotal: total.count,
+        recordsFiltered: results.total
+      });
+    }).catch((err) => {
+      console.log('ERROR - /parliament.json', err);
+      res.send({ recordsTotal: 0, recordsFiltered: 0, data: [] });
+    });
+});
+
+app.get('/stats.json', recordResponseTime, noCacheJson, function(req, res) {
+  if (req.user.hideStats) { return res.molochError(403, 'Need permission to view stats'); }
 
   var query = {from: +req.query.start || 0,
                size: Math.min(10000, +req.query.length || 500),
@@ -3178,12 +3620,15 @@ app.get('/stats.json', recordResponseTime, function(req, res) {
        "monitoring", "tcpSessions", "udpSessions", "icmpSessions", "sctpSessions", "espSessions",
        "usedSpaceM", "freeSpaceM", "freeSpaceP", "memory", "memoryP", "frags", "cpu", "esHealthMS",
        "diskQueue", "esQueue", "packetQueue", "closeQueue", "needSave", "fragsQueue",
-       "deltaFragsDropped", "deltaOverloadDropped", "deltaESDropped"
+       "deltaFragsDropped", "deltaOverloadDropped", "deltaESDropped",
+        "deltaWrittenBytes", "deltaUnwrittenBytes"
       ]) {
         fields[key] = fields[key] || 0;
       }
 
       fields.deltaBytesPerSec           = Math.floor(fields.deltaBytes * 1000.0/fields.deltaMS);
+      fields.deltaWrittenBytesPerSec    = Math.floor(fields.deltaWrittenBytes * 1000.0/fields.deltaMS);
+      fields.deltaUnwrittenBytesPerSec  = Math.floor(fields.deltaUnwrittenBytes * 1000.0/fields.deltaMS);
       fields.deltaBitsPerSec            = Math.floor(fields.deltaBytes * 1000.0/fields.deltaMS * 8);
       fields.deltaPacketsPerSec         = Math.floor(fields.deltaPackets * 1000.0/fields.deltaMS);
       fields.deltaSessionsPerSec        = Math.floor(fields.deltaSessions * 1000.0/fields.deltaMS);
@@ -3207,8 +3652,8 @@ app.get('/stats.json', recordResponseTime, function(req, res) {
   });
 });
 
-app.get('/dstats.json', function(req, res) {
-  noCache(req, res);
+app.get('/dstats.json', noCacheJson, function(req, res) {
+  if (req.user.hideStats) { return res.molochError(403, 'Need permission to view stats'); }
 
   var nodeName = req.query.nodeName;
 
@@ -3240,6 +3685,8 @@ app.get('/dstats.json', function(req, res) {
     deltaTotalDropped: {_source: ["deltaDropped", "deltaOverloadDropped"], func: function (item) {return Math.floor(item.deltaDropped + item.deltaOverloadDropped);}},
     deltaBytesPerSec: {_source: ["deltaBytes", "deltaMS"], func: function(item) {return Math.floor(item.deltaBytes * 1000.0/item.deltaMS);}},
     deltaBitsPerSec: {_source: ["deltaBytes", "deltaMS"], func: function(item) {return Math.floor(item.deltaBytes * 1000.0/item.deltaMS * 8);}},
+    deltaWrittenBytesPerSec: {_source: ["deltaWrittenBytes", "deltaMS"], func: function(item) {return Math.floor(item.deltaWrittenBytes * 1000.0/item.deltaMS);}},
+    deltaUnwrittenBytesPerSec: {_source: ["deltaUnwrittenBytes", "deltaMS"], func: function(item) {return Math.floor(item.deltaUnwrittenBytes * 1000.0/item.deltaMS);}},
     deltaPacketsPerSec: {_source: ["deltaPackets", "deltaMS"], func: function(item) {return Math.floor(item.deltaPackets * 1000.0/item.deltaMS);}},
     deltaSessionsPerSec: {_source: ["deltaSessions", "deltaMS"], func: function(item) {return Math.floor(item.deltaSessions * 1000.0/item.deltaMS);}},
     deltaSessionBytesPerSec: {_source: ["deltaSessionBytes", "deltaMS"], func: function(item) {return Math.floor(item.deltaSessionBytes * 1000.0/item.deltaMS);}},
@@ -3312,7 +3759,8 @@ app.get('/dstats.json', function(req, res) {
   });
 });
 
-app.get('/:nodeName/:fileNum/filesize.json', function(req, res) {
+app.get('/:nodeName/:fileNum/filesize.json', noCacheJson, function(req, res) {
+
   Db.fileIdToFile(req.params.nodeName, req.params.fileNum, function(file) {
     if (!file) {
       return res.send({filesize: -1});
@@ -3399,27 +3847,48 @@ function fixFields(fields, fixCb) {
  *
  * @example
  * { http: { statuscode: [200, 302] } } => { "http.statuscode": [200, 302] }
+ * @example
+ * { cert: [ { alt: ["test.com"] } ] } => { "cert.alt": ["test.com"] }
  *
  * @param {object} fields The object containing fields to be flattened
  * @returns {object} fields The object with fields flattened
  */
 function flattenFields(fields) {
-  var newFields = {};
+  let newFields = {};
 
   for (let key in fields) {
     if (fields.hasOwnProperty(key)) {
-      var field = fields[key];
+      let field = fields[key];
+      let baseKey = key + '.';
       if (typeof field === 'object' && !field.length) {
-        var baseKey = key + '.';
-        for (var nestedKey in field) {
+        // flatten out object
+        for (let nestedKey in field) {
           if (field.hasOwnProperty(nestedKey)) {
-            var nestedField = field[nestedKey];
-            var newKey = baseKey + nestedKey;
+            let nestedField = field[nestedKey];
+            let newKey = baseKey + nestedKey;
             newFields[newKey] = nestedField;
           }
         }
         fields[key] = null;
         delete fields[key];
+      } else if (Array.isArray(field)) {
+        // flatten out list
+        for (let nestedField of field) {
+          if (typeof nestedField === 'object') {
+            for (let nestedKey in nestedField) {
+              let newKey = baseKey + nestedKey;
+              if (newFields[newKey] === undefined) {
+                newFields[newKey] = nestedField[nestedKey];
+              } else if (Array.isArray(newFields[newKey])) {
+                newFields[newKey].push(nestedField[nestedKey]);
+              } else {
+                newFields[newKey] = [newFields[newKey], nestedField[nestedKey]];
+              }
+            }
+            fields[key] = null;
+            delete fields[key];
+          }
+        }
       }
     }
   }
@@ -3433,7 +3902,7 @@ function flattenFields(fields) {
   return fields;
 }
 
-app.use('/buildQuery.json', logAction('query'), function(req, res, next) {
+app.use('/buildQuery.json', logAction('query'), noCacheJson, function(req, res, next) {
 
   if (req.method === "POST") {
     req.query = req.body;
@@ -3458,8 +3927,7 @@ app.use('/buildQuery.json', logAction('query'), function(req, res, next) {
   });
 });
 
-app.get('/sessions.json', logAction('sessions'), recordResponseTime, function(req, res) {
-  var i;
+app.get('/sessions.json', logAction('sessions'), recordResponseTime, noCacheJson, function(req, res) {
 
   var graph = {};
   var map = {};
@@ -3562,7 +4030,8 @@ app.get('/sessions.json', logAction('sessions'), recordResponseTime, function(re
   });
 });
 
-app.get('/spigraph.json', logAction('spigraph'), fieldToExp, recordResponseTime, function(req, res) {
+app.get('/spigraph.json', logAction('spigraph'), fieldToExp, recordResponseTime, noCacheJson, function(req, res) {
+
   req.query.facets = 1;
   buildSessionQuery(req, function(bsqErr, query, indices) {
     var results = {items: [], graph: {}, map: {}};
@@ -3575,6 +4044,8 @@ app.get('/spigraph.json', logAction('spigraph'), fieldToExp, recordResponseTime,
     var size = +req.query.size || 20;
 
     var field = req.query.field || 'node';
+
+    if (req.query.exp === 'ip.dst:port') { field = 'ip.dst:port'; }
 
     if (field === 'ip.dst:port') {
       query.aggregations.field = {terms: {field: 'dstIp', size: size}, aggs: {sub: {terms: {field: 'dstPort', size: size}}}};
@@ -3601,7 +4072,6 @@ app.get('/spigraph.json', logAction('spigraph'), fieldToExp, recordResponseTime,
       }
 
       var aggs = result.aggregations.field.buckets;
-      var interval = query.aggregations.dbHisto.histogram.interval;
       var filter = {term: {}};
       var sfilter = {term: {}};
       query.query.bool.filter.push(filter);
@@ -3677,7 +4147,8 @@ app.get('/spigraph.json', logAction('spigraph'), fieldToExp, recordResponseTime,
   });
 });
 
-app.get('/spiview.json', logAction('spiview'), recordResponseTime, function(req, res) {
+app.get('/spiview.json', logAction('spiview'), recordResponseTime, noCacheJson, function(req, res) {
+
   if (req.query.spi === undefined) {
     return res.send({spi:{}, recordsTotal: 0, recordsFiltered: 0});
   }
@@ -3836,7 +4307,7 @@ app.get('/spiview.json', logAction('spiview'), recordResponseTime, function(req,
   });
 });
 
-app.get('/dns.json', logAction(), function(req, res) {
+app.get('/dns.json', logAction(), noCacheJson, function(req, res) {
   console.log("dns.json", req.query);
   dns.reverse(req.query.ip, function (err, data) {
     if (err) {
@@ -3847,26 +4318,52 @@ app.get('/dns.json', logAction(), function(req, res) {
 });
 
 function buildConnections(req, res, cb) {
-  if (req.query.dstField === "ip.dst:port") {
-    var dstipport = true;
-    req.query.dstField = "dstIp";
+  let dstipport;
+  if (req.query.dstField === 'ip.dst:port') {
+    dstipport = true;
+    req.query.dstField = 'dstIp';
   }
 
-  req.query.srcField       = req.query.srcField || "srcIp";
-  req.query.dstField       = req.query.dstField || "dstIp";
-  var fsrc                 = req.query.srcField;
-  var fdst                 = req.query.dstField;
-  var minConn              = req.query.minConn  || 1;
-  req.query.iDisplayLength = req.query.iDisplayLength || "5000";
+  req.query.srcField       = req.query.srcField || 'srcIp';
+  req.query.dstField       = req.query.dstField || 'dstIp';
+  req.query.iDisplayLength = req.query.iDisplayLength || '5000';
+  let fsrc                 = req.query.srcField;
+  let fdst                 = req.query.dstField;
+  let minConn              = req.query.minConn || 1;
 
-  var srcIsIp              = fsrc.match(/(\.ip|Ip)$/);
-  var dstIsIp              = fdst.match(/(\.ip|Ip)$/);
+  let dstIsIp = fdst.match(/(\.ip|Ip)$/);
 
-  var nodesHash = {};
-  var connects = {};
+  let nodesHash = {};
+  let connects = {};
 
-  function process(vsrc, vdst, f) {
+  let dbFieldsMap = Config.getDBFieldsMap();
+  function updateValues (data, property, fields) {
+    for (let i in fields) {
+      let dbField = fields[i];
+      let field = dbFieldsMap[dbField];
+      if (data.hasOwnProperty(dbField)) {
+        // sum integers
+        if (field.type === 'integer' && field.category !== 'port') {
+          property[dbField] = (property[dbField] || 0) + data[dbField];
+        } else { // make a list of values
+          if (!property[dbField]) { property[dbField] = []; }
+          // make all values an array (because sometimes they are by default)
+          let values = [ data[dbField] ];
+          if (Array.isArray(data[dbField])) {
+            values = data[dbField];
+          }
+          for (let value of values) {
+            property[dbField].push(value);
+          }
+          if (property[dbField] && Array.isArray(property[dbField])) {
+            property[dbField] = [ ...new Set(property[dbField]) ]; // unique only
+          }
+        }
+      }
+    }
+  }
 
+  function process (vsrc, vdst, f, fields) {
     // ES 6 is returning formatted timestamps instead of ms like pre 6 did
     // https://github.com/elastic/elasticsearch/issues/27740
     if (vsrc.length === 24 && vsrc[23] === 'Z' && vsrc.match(/^\d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\d.\d\d\dZ$/)) {
@@ -3877,37 +4374,30 @@ function buildConnections(req, res, cb) {
     }
 
     if (nodesHash[vsrc] === undefined) {
-      nodesHash[vsrc] = {id: ""+vsrc, db: 0, by: 0, pa: 0, cnt: 0, sessions: 0};
+      nodesHash[vsrc] = { id: `${vsrc}`, cnt: 0, sessions: 0 };
     }
 
     nodesHash[vsrc].sessions++;
-    nodesHash[vsrc].by += f.totBytes;
-    nodesHash[vsrc].db += f.totDataBytes;
-    nodesHash[vsrc].pa += f.totPackets;
     nodesHash[vsrc].type |= 1;
+    updateValues(f, nodesHash[vsrc], fields);
 
     if (nodesHash[vdst] === undefined) {
-      nodesHash[vdst] = {id: ""+vdst, db: 0, by: 0, pa: 0, cnt: 0, sessions: 0};
+      nodesHash[vdst] = { id: `${vdst}`, cnt: 0, sessions: 0 };
     }
 
     nodesHash[vdst].sessions++;
-    nodesHash[vdst].by += f.totBytes;
-    nodesHash[vdst].db += f.totDataBytes;
-    nodesHash[vdst].pa += f.totPackets;
     nodesHash[vdst].type |= 2;
+    updateValues(f, nodesHash[vdst], fields);
 
-    var n = "" + vsrc + "->" + vdst;
-    if (connects[n] === undefined) {
-      connects[n] = {value: 0, source: vsrc, target: vdst, by: 0, db: 0, pa: 0, node: {}};
+    let linkId = `${vsrc}->${vdst}`;
+    if (connects[linkId] === undefined) {
+      connects[linkId] = { value: 0, source: vsrc, target: vdst };
       nodesHash[vsrc].cnt++;
       nodesHash[vdst].cnt++;
     }
 
-    connects[n].value++;
-    connects[n].by += f.totBytes;
-    connects[n].db += f.totDataBytes;
-    connects[n].pa += f.totPackets;
-    connects[n].node[f.node] = 1;
+    connects[linkId].value++;
+    updateValues(f, connects[linkId], fields);
   }
 
   buildSessionQuery(req, function(bsqErr, query, indices) {
@@ -3917,29 +4407,36 @@ function buildConnections(req, res, cb) {
     query.query.bool.filter.push({exists: {field: req.query.srcField}});
     query.query.bool.filter.push({exists: {field: req.query.dstField}});
 
-    query._source = ["totBytes", "totDataBytes", "totPackets", "node"];
+    // get the requested fields
+    let fields = ['totBytes', 'totDataBytes', 'totPackets', 'node'];
+    if (req.query.fields) { fields = req.query.fields.split(','); }
+    query._source = fields;
     query.docvalue_fields = [fsrc, fdst];
 
     if (dstipport) {
-      query._source.push("dstPort");
+      query._source.push('dstPort');
     }
 
-    //console.log("buildConnections query", JSON.stringify(query, null, 2));
+    if (Config.debug) {
+      console.log('buildConnections query', JSON.stringify(query, null, 2));
+    }
 
     Db.searchPrimary(indices, 'session', query, function (err, graph) {
-    //console.log("buildConnections result", JSON.stringify(graph, null, 2));
+      if (Config.debug) {
+        console.log('buildConnections result', JSON.stringify(graph, null, 2));
+      }
+
       if (err || graph.error) {
-        console.log("Build Connections ERROR", err, graph.error);
+        console.log('Build Connections ERROR', err, graph.error);
         return cb(err || graph.error);
       }
-      var i;
 
-      async.eachLimit(graph.hits.hits, 10, function(hit, hitCb) {
-        var f = hit._source;
+      async.eachLimit(graph.hits.hits, 10, function (hit, hitCb) {
+        let f = hit._source;
+        f = flattenFields(f);
 
-        var asrc = hit.fields[fsrc];
-        var adst = hit.fields[fdst];
-
+        let asrc = hit.fields[fsrc];
+        let adst = hit.fields[fdst];
 
         if (asrc === undefined || adst === undefined) {
           return setImmediate(hitCb);
@@ -3956,20 +4453,20 @@ function buildConnections(req, res, cb) {
         for (let vsrc of asrc) {
           for (let vdst of adst) {
             if (dstIsIp && dstipport) {
-              if (vdst.includes(":")) {vdst = '[' + vdst + ']';}
-              vdst += ":" + f.dstPort;
+              if (vdst.includes(':')) { vdst = `[${vdst}]`; }
+              vdst += ':' + f.dstPort;
             }
-            process(vsrc, vdst, f);
+            process(vsrc, vdst, f, fields);
           }
         }
         setImmediate(hitCb);
       }, function (err) {
-        var nodes = [];
-        var nodeKeys = Object.keys(nodesHash);
-        if (Config.get("regressionTests", false)) {
-          nodeKeys = nodeKeys.sort(function(a,b){return nodesHash[a].id.localeCompare(nodesHash[b].id);});
+        let nodes = [];
+        let nodeKeys = Object.keys(nodesHash);
+        if (Config.get('regressionTests', false)) {
+          nodeKeys = nodeKeys.sort(function (a,b) { return nodesHash[a].id.localeCompare(nodesHash[b].id); });
         }
-        for (var node of nodeKeys) {
+        for (let node of nodeKeys) {
           if (nodesHash[node].cnt < minConn) {
             nodesHash[node].pos = -1;
           } else {
@@ -3978,9 +4475,8 @@ function buildConnections(req, res, cb) {
           }
         }
 
-
-        var links = [];
-        for (var key in connects) {
+        let links = [];
+        for (let key in connects) {
           var c = connects[key];
           c.source = nodesHash[c.source].pos;
           c.target = nodesHash[c.target].pos;
@@ -3989,10 +4485,12 @@ function buildConnections(req, res, cb) {
           }
         }
 
-        //console.log("nodesHash", nodesHash);
-        //console.log("connects", connects);
-        //console.log("nodes", nodes.length, nodes);
-        //console.log("links", links.length, links);
+        if (Config.debug) {
+          console.log('nodesHash', nodesHash);
+          console.log('connects', connects);
+          console.log('nodes', nodes.length, nodes);
+          console.log('links', links.length, links);
+        }
 
         return cb(null, nodes, links, graph.hits.total);
       });
@@ -4000,32 +4498,53 @@ function buildConnections(req, res, cb) {
   });
 }
 
-app.get('/connections.json', logAction('connections'), recordResponseTime, function(req, res) {
-  var health;
-  Db.healthCache(function(err, h) {health = h;});
+app.get('/connections.json', logAction('connections'), recordResponseTime, function (req, res) {
+  let health;
+  Db.healthCache(function (err, h) { health = h; });
   buildConnections(req, res, function (err, nodes, links, total) {
     if (err) { return res.molochError(403, err.toString()); }
-    res.send({health: health, nodes: nodes, links: links, recordsFiltered: total});
+    res.send({ health: health, nodes: nodes, links: links, recordsFiltered: total });
   });
 });
 
 app.get('/connections.csv', logAction(), function(req, res) {
-  res.setHeader("Content-Type", "application/force-download");
+  noCache(req, res, "text/csv");
+
   var seperator = req.query.seperator || ",";
   buildConnections(req, res, function (err, nodes, links, total) {
     if (err) {
       return res.send(err);
     }
 
-    res.write("Source, Destination, Sessions, Packets, Bytes, Databytes\r\n");
+    // write out the fields requested
+    let fields = ['totBytes', 'totDataBytes', 'totPackets', 'node'];
+    if (req.query.fields) { fields = req.query.fields.split(','); }
+
+    res.write("Source, Destination, Sessions");
+    let displayFields = {};
+    for (let field of fields) {
+      let fieldsMap = JSON.parse(app.locals.fieldsMap);
+      for (let f in fieldsMap) {
+        if (fieldsMap[f].dbField === field) {
+          let friendlyName = fieldsMap[f].friendlyName;
+          displayFields[field] = fieldsMap[f];
+          res.write(`, ${friendlyName}`);
+        }
+      }
+    }
+    res.write('\r\n');
+
     for (let i = 0, ilen = links.length; i < ilen; i++) {
       res.write("\"" + nodes[links[i].source].id.replace('"', '""') + "\"" + seperator +
                 "\"" + nodes[links[i].target].id.replace('"', '""') + "\"" + seperator +
-                     links[i].value + seperator +
-                     links[i].pa + seperator +
-                     links[i].by + seperator +
-                     links[i].db + "\r\n");
+                     links[i].value + seperator);
+      for (let f = 0, flen = fields.length; f < flen; f++) {
+        res.write(links[i][displayFields[fields[f]].dbField].toString());
+        if (f !== flen - 1) { res.write(seperator); }
+      }
+      res.write('\r\n');
     }
+
     res.end();
   });
 });
@@ -4081,6 +4600,7 @@ function csvListWriter(req, res, list, fields, pcapWriter, extension) {
 
 app.get(/\/sessions.csv.*/, logAction(), function(req, res) {
   noCache(req, res, "text/csv");
+
   // default fields to display in csv
   var fields = ["ipProtocol", "firstPacket", "lastPacket", "srcIp", "srcPort", "srcGEO", "dstIp", "dstPort", "dstGEO", "totBytes", "totDataBytes", "totPackets", "node"];
   // save requested fields because sessionsListFromQuery returns fields with
@@ -4103,17 +4623,96 @@ app.get(/\/sessions.csv.*/, logAction(), function(req, res) {
   }
 });
 
+app.get('/multiunique.txt', logAction(), function(req, res) {
+  noCache(req, res, 'text/plain; charset=utf-8');
+
+  if (req.query.exp === undefined) {
+    return res.send("Missing exp parameter");
+  }
+
+  let fields = [];
+  let parts = req.query.exp.split(',');
+  for (let i = 0; i < parts.length; i++) {
+    let field = Config.getFieldsMap()[parts[i]];
+    if (!field) {
+      return res.send(`Unknown expression ${parts[i]}\n`);
+    }
+    fields.push(field);
+  }
+
+  let separator = req.query.separator || ', ';
+  let doCounts = parseInt(req.query.counts, 10) || 0;
+
+  let results = [];
+  function printUnique(buckets, line) {
+    for (let i = 0; i < buckets.length; i++) {
+      if (buckets[i].field) {
+        printUnique(buckets[i].field.buckets, line + buckets[i].key + separator);
+      } else {
+        results.push({line: line + buckets[i].key, count: buckets[i].doc_count});
+      }
+    }
+  }
+
+  buildSessionQuery(req, function(err, query, indices) {
+    delete query.sort;
+    delete query.aggregations;
+    query.size = 0;
+
+    if (!query.query.bool.must) {
+      query.query.bool.must = [];
+    }
+
+    let lastQ = query;
+    for (let i = 0; i < fields.length; i++) {
+      query.query.bool.must.push({ exists: { field: fields[i].dbField } });
+      lastQ.aggregations = {field: { terms : {field : fields[i].dbField, size: 1000000}}};
+      lastQ = lastQ.aggregations.field;
+    }
+
+    if (Config.debug > 2) {
+      console.log("multiunique aggregations", indices, JSON.stringify(query, false, 2));
+    }
+    Db.searchPrimary(indices, 'session', query, function(err, result) {
+      if (err) {
+        console.log('multiunique ERROR', err);
+        res.status(400);
+        return res.end(err);
+      }
+
+      if (Config.debug > 2) {
+        console.log('result', JSON.stringify(result, false, 2));
+      }
+      printUnique(result.aggregations.field.buckets, "");
+
+      if (req.query.sort !== 'field') {
+        results = results.sort(function(a, b) {return b.count - a.count;});
+      }
+
+      if (doCounts) {
+        for (let i = 0; i < results.length; i++) {
+          res.write(results[i].line + separator + results[i].count + '\n');
+        }
+      } else {
+        for (let i = 0; i < results.length; i++) {
+          res.write(results[i].line + '\n');
+        }
+      }
+      return res.end();
+    });
+  });
+});
+
 app.get('/unique.txt', logAction(), fieldToExp, function(req, res) {
+  noCache(req, res, 'text/plain; charset=utf-8');
+
   if (req.query.field === undefined && req.query.exp === undefined) {
     return res.send("Missing field or exp parameter");
   }
 
-  noCache(req, res);
-
   /* How should the results be written.  Use setImmediate to not blow stack frame */
   var writeCb;
   var doneCb;
-  var writes = 0;
   var items = [];
   var aggSize = 1000000;
 
@@ -4127,7 +4726,7 @@ app.get('/unique.txt', logAction(), fieldToExp, function(req, res) {
     if (spiDataMaxIndices !== -1) {
       if (req.query.date === '-1' ||
           (req.query.date !== undefined && +req.query.date > spiDataMaxIndices)) {
-        console.log("INFO For autocomplete replacing date="+ req.query.date, "with", spiDataMaxIndices);
+        console.log(`INFO For autocomplete replacing date=${safeStr(req.query.date)} with ${spiDataMaxIndices}`);
         req.query.date = spiDataMaxIndices;
       }
     }
@@ -4377,66 +4976,6 @@ function processSessionIdAndDecode(id, numPackets, doneCb) {
   numPackets, 10);
 }
 
-// Some ideas from hexy.js
-function toHex(input, offsets) {
-  var out = "";
-  var i, ilen;
-
-  for (var pos = 0, poslen = input.length; pos < poslen; pos += 16) {
-    var line = input.slice(pos, Math.min(pos+16, input.length));
-    if (offsets) {
-      out += sprintf.sprintf("<span class=\"sessionln\">%08d:</span> ", pos);
-    }
-
-    for (i = 0; i < 16; i++) {
-      if (i % 2 === 0 && i > 0) {
-        out += " ";
-      }
-      if (i < line.length) {
-        out += sprintf.sprintf("%02x", line[i]);
-      } else {
-        out += "  ";
-      }
-    }
-
-    out += " ";
-
-    for (i = 0, ilen = line.length; i < ilen; i++) {
-      if (line[i] <= 32 || line[i]  > 128) {
-        out += ".";
-      } else {
-        out += safeStr(line.toString("ascii", i, i+1));
-      }
-    }
-    out += "\n";
-  }
-  return out;
-}
-
-// Modified version of https://gist.github.com/penguinboy/762197
-function flattenObject1 (obj) {
-  var toReturn = {};
-
-  for (var i in obj) {
-    if (!obj.hasOwnProperty(i)) {
-      continue;
-    }
-
-    if ((typeof obj[i]) === 'object' && !Array.isArray(obj[i])) {
-      for (var x in obj[i]) {
-        if (!obj[i].hasOwnProperty(x)) {
-          continue;
-        }
-
-        toReturn[i + '.' + x] = obj[i][x];
-      }
-    } else {
-      toReturn[i] = obj[i];
-    }
-  }
-  return toReturn;
-}
-
 function localSessionDetailReturnFull(req, res, session, incoming) {
   if (req.packetsOnly) { // only return packets
     res.render('sessionPackets.pug', {
@@ -4589,7 +5128,7 @@ function localSessionDetail(req, res) {
   },
   function(err, session) {
     if (err) {
-      return res.end("Problem loading packets for " + req.params.id + " Error: " + err);
+      return res.end("Problem loading packets for " + safeStr(req.params.id) + " Error: " + err);
     }
     session.id = req.params.id;
     sortFields(session);
@@ -4597,7 +5136,7 @@ function localSessionDetail(req, res) {
     //console.log("session", util.inspect(session, false, 15));
     /* Now reassembly the packets */
     if (packets.length === 0) {
-      session._err = err || "No pcap data found";
+      session._err = "No pcap data found";
       localSessionDetailReturn(req, res, session, []);
     } else if (packets[0].ip === undefined) {
       session._err = "Couldn't decode pcap file, check viewer log";
@@ -4647,7 +5186,7 @@ function localSessionDetail(req, res) {
 app.get('/:nodeName/session/:id/detail', logAction(), function(req, res) {
   Db.getWithOptions(Db.sid2Index(req.params.id), 'session', Db.sid2Id(req.params.id), {}, function(err, session) {
     if (err || !session.found) {
-      return res.end("Couldn't look up SPI data, error for session " + req.params.id + " Error: " +  err);
+      return res.end("Couldn't look up SPI data, error for session " + safeStr(req.params.id) + " Error: " +  err);
     }
 
     session = session._source;
@@ -4687,6 +5226,8 @@ app.get('/:nodeName/session/:id/detail', logAction(), function(req, res) {
  * Get Session Packets
  */
 app.get('/:nodeName/session/:id/packets', logAction(), function(req, res) {
+  if (req.user.hidePcap) { return res.molochError(403, 'Need permission to view packets'); }
+
   isLocalView(req.params.nodeName, function () {
     noCache(req, res);
     req.packetsOnly = true;
@@ -5018,6 +5559,8 @@ function writePcapNg(res, id, options, doneCb) {
 }
 
 app.get('/:nodeName/pcapng/:id.pcapng', checkProxyRequest, function(req, res) {
+  if (req.user.disablePcapDownload) { return res.molochError(403, 'Need permission to download pcap'); }
+
   noCache(req, res, "application/vnd.tcpdump.pcap");
   writePcapNg(res, req.params.id, {writeHeader: !req.query || !req.query.noHeader || req.query.noHeader !== "true"}, function () {
     res.end();
@@ -5025,6 +5568,8 @@ app.get('/:nodeName/pcapng/:id.pcapng', checkProxyRequest, function(req, res) {
 });
 
 app.get('/:nodeName/pcap/:id.pcap', checkProxyRequest, function(req, res) {
+  if (req.user.disablePcapDownload) { return res.molochError(403, 'Need permission to download pcap'); }
+
   noCache(req, res, "application/vnd.tcpdump.pcap");
 
   writePcap(res, req.params.id, {writeHeader: !req.query || !req.query.noHeader || req.query.noHeader !== "true"}, function () {
@@ -5078,6 +5623,8 @@ app.get('/:nodeName/raw/:id', checkProxyRequest, function(req, res) {
 });
 
 app.get('/:nodeName/entirePcap/:id.pcap', checkProxyRequest, function(req, res) {
+  if (req.user.disablePcapDownload) { return res.molochError(403, 'Need permission to download pcap'); }
+
   noCache(req, res, "application/vnd.tcpdump.pcap");
 
   var options = {writeHeader: true};
@@ -5092,7 +5639,7 @@ app.get('/:nodeName/entirePcap/:id.pcap', checkProxyRequest, function(req, res) 
 
   Db.searchPrimary('sessions2-*', 'session', query, function(err, data) {
     async.forEachSeries(data.hits.hits, function(item, nextCb) {
-      writePcap(res, item._id, options, nextCb);
+      writePcap(res, Db.session2Sid(item), options, nextCb);
     }, function (err) {
       res.end();
     });
@@ -5113,7 +5660,7 @@ function sessionsPcapList(req, res, list, pcapWriter, extension) {
     var fields = item._source || item.fields;
     isLocalView(fields.node, function () {
       // Get from our DISK
-      pcapWriter(res, item._id, options, nextCb);
+      pcapWriter(res, Db.session2Sid(item), options, nextCb);
     },
     function () {
       // Get from remote DISK
@@ -5121,7 +5668,7 @@ function sessionsPcapList(req, res, list, pcapWriter, extension) {
         var buffer = Buffer.alloc(fields.pa*20 + fields.by);
         var bufpos = 0;
         var info = url.parse(viewUrl);
-        info.path = Config.basePath(fields.node) + fields.node + "/" + extension + "/" + item._id + "." + extension;
+        info.path = Config.basePath(fields.node) + fields.node + "/" + extension + "/" + Db.session2Sid(item) + "." + extension;
         info.agent = (client === http?internals.httpAgent:internals.httpsAgent);
 
         addAuth(info, req.user, fields.node);
@@ -5176,10 +5723,12 @@ function sessionsPcap(req, res, pcapWriter, extension) {
 }
 
 app.get(/\/sessions.pcapng.*/, logAction(), function(req, res) {
+  if (req.user.disablePcapDownload) { return res.molochError(403, 'Need permission to download pcap'); }
   return sessionsPcap(req, res, writePcapNg, "pcapng");
 });
 
 app.get(/\/sessions.pcap.*/, logAction(), function(req, res) {
+  if (req.user.disablePcapDownload) { return res.molochError(403, 'Need permission to download pcap'); }
   return sessionsPcap(req, res, writePcap, "pcap");
 });
 
@@ -5198,7 +5747,8 @@ app.post('/user/list', logAction('users'), recordResponseTime, function(req, res
   if (!req.user.createEnabled) {return res.molochError(404, 'Need admin privileges');}
 
   var columns = ['userId', 'userName', 'expression', 'enabled', 'createEnabled',
-    'webEnabled', 'headerAuthEnabled', 'emailSearch', 'removeEnabled', 'packetSearch'];
+    'webEnabled', 'headerAuthEnabled', 'emailSearch', 'removeEnabled', 'packetSearch',
+    'hideStats', 'hideFiles', 'hidePcap', 'disablePcapDownload'];
 
   var query = {
     _source: columns,
@@ -5227,7 +5777,6 @@ app.post('/user/list', logAction('users'), recordResponseTime, function(req, res
   .then(([users, total]) => {
     if (users.error) { throw users.error; }
     let results = { total: users.hits.total, results: [] };
-    let hasSharedUser = false;
     for (let i = 0, ilen = users.hits.hits.length; i < ilen; i++) {
       let fields = users.hits.hits[i]._source || users.hits.hits[i].fields;
       fields.id = users.hits.hits[i]._id;
@@ -5359,6 +5908,10 @@ app.post('/user/update', logAction(), checkCookieToken, postSettingUser, functio
     user.headerAuthEnabled = req.body.headerAuthEnabled === true;
     user.removeEnabled = req.body.removeEnabled === true;
     user.packetSearch = req.body.packetSearch === true;
+    user.hideStats = req.body.hideStats === true;
+    user.hideFiles = req.body.hideFiles === true;
+    user.hidePcap = req.body.hidePcap === true;
+    user.disablePcapDownload = req.body.disablePcapDownload === true;
 
     // Can only change createEnabled if it is currently turned on
     if (req.body.createEnabled !== undefined && req.user.createEnabled) {
@@ -5445,6 +5998,10 @@ function addTagsList(allTagNames, list, doneCb) {
       }
     };
 
+    if (Config.get('multiES', false) && session._node) {
+      document._node = session._node;  // add tag to a session using MultiES
+    }
+
     Db.update(session._index, 'session', session._id, document, function(err, data) {
       if (err) {
         console.log("addTagsList error", session, err, data);
@@ -5488,6 +6045,10 @@ function removeTagsList(res, allTagNames, list) {
         }
       };
 
+    }
+
+    if (Config.get('multiES', false) && session._node) {
+      document._node = session._node; // remove tag from a session using MultiES
     }
 
     Db.update(session._index, 'session', session._id, document, function(err, data) {
@@ -5671,14 +6232,19 @@ function pauseHuntJobWithError (huntId, hunt, error) {
     hunt.errors.push(error);
   }
 
-  Db.setHunt(huntId, hunt, (err, info) => {
-    internals.runningHuntJob = undefined;
-    if (err) {
-      console.log('Error adding errors and pausing hunt job', err, info);
-      return;
-    }
-    processHuntJobs();
-  });
+  function continueProcess () {
+    Db.setHunt(huntId, hunt, (err, info) => {
+      internals.runningHuntJob = undefined;
+      if (err) {
+        console.log('Error adding errors and pausing hunt job', err, info);
+        return;
+      }
+      processHuntJobs();
+    });
+  }
+
+  let message = `*${hunt.name}* hunt job paused with error: *${error.value}*\n*${hunt.matchedSessions}* matched sessions out of *${hunt.searchedSessions}* searched sessions`;
+  issueAlert(hunt.notifier, message, continueProcess);
 }
 
 function updateHuntStats (hunt, huntId, session, searchedSessions, cb) {
@@ -5692,16 +6258,20 @@ function updateHuntStats (hunt, huntId, session, searchedSessions, cb) {
       if (!huntHit || !huntHit.found) { // hunt hit not found, likely deleted
         return cb('undefined');
       }
+
       if (err) {
         let errorText = `Error finding hunt: ${hunt.name} (${huntId}): ${err}`;
         pauseHuntJobWithError(huntId, hunt, { value: errorText });
         return cb({ success: false, text: errorText });
       }
+
       hunt.status = huntHit._source.status;
       hunt.lastUpdated = now;
       hunt.searchedSessions = searchedSessions;
       hunt.lastPacketTime = lastPacketTime;
+
       Db.setHunt(huntId, hunt, () => {});
+
       if (hunt.status === 'paused') {
         return cb('paused');
       } else {
@@ -5758,7 +6328,6 @@ function buildHuntOptions (hunt) {
 
 // Actually do the search against ES and process the results.
 function runHuntJob (huntId, hunt, query, user) {
-
   let options = buildHuntOptions(hunt);
   let searchedSessions;
 
@@ -5831,10 +6400,20 @@ function runHuntJob (huntId, hunt, query, user) {
       // We are totally done with this hunt
       hunt.status = 'finished';
       hunt.searchedSessions = hunt.totalSessions;
-      Db.setHunt(huntId, hunt, (err, info) => {
-        internals.runningHuntJob = undefined;
-        processHuntJobs(); // Start new hunt
-      });
+
+      function continueProcess () {
+        Db.setHunt(huntId, hunt, (err, info) => {
+          internals.runningHuntJob = undefined;
+          processHuntJobs(); // Start new hunt
+        });
+      }
+
+      if (hunt.notifier) {
+        let message = `*${hunt.name}* hunt job finished:\n*${hunt.matchedSessions}* matched sessions out of *${hunt.searchedSessions}* searched sessions`;
+        issueAlert(hunt.notifier, message, continueProcess);
+      } else {
+        return continueProcess();
+      }
     });
   });
 }
@@ -5939,7 +6518,7 @@ function processHuntJobs (cb) {
     console.log('HUNT - processing hunt jobs');
   }
 
-  if (internals.runningHuntJob) { return (cb?cb():null); }
+  if (internals.runningHuntJob) { return (cb ? cb() : null); }
   internals.runningHuntJob = true;
 
   let query = {
@@ -5964,12 +6543,12 @@ function processHuntJobs (cb) {
             // restart the abandoned hunt
             processHuntJob(id, hunt);
           }
-          return (cb?cb():null);
+          return (cb ? cb() : null);
         } else if (hunt.status === 'queued') { // get the first queued hunt
-          hunt.status = 'running'; // update the hunt job
           internals.runningHuntJob = hunt;
+          hunt.status = 'running'; // update the hunt job
           processHuntJob(id, hunt);
-          return (cb?cb():null);
+          return (cb ? cb() : null);
         }
       }
 
@@ -6076,7 +6655,7 @@ app.post('/hunt', logAction('hunt'), checkCookieToken, function (req, res) {
   });
 });
 
-app.get('/hunt/list', logAction('hunt/list'), recordResponseTime, function (req, res) {
+app.get('/hunt/list', recordResponseTime, function (req, res) {
   if (Config.get('multiES', false)) { return res.molochError(401, 'Not supported in multies'); }
   if (!req.user.packetSearch) { return res.molochError(403, 'Need packet search privileges'); }
 
@@ -6150,13 +6729,13 @@ app.delete('/hunt/:id', logAction('hunt/:id'), checkCookieToken, checkHuntAccess
   });
 });
 
-app.put('/hunt/:id/pause', logAction('hunt'), checkCookieToken, checkHuntAccess, function (req, res) {
+app.put('/hunt/:id/pause', logAction('hunt/:id/pause'), checkCookieToken, checkHuntAccess, function (req, res) {
   if (Config.get('multiES', false)) { return res.molochError(401, 'Not supported in multies'); }
   if (!req.user.packetSearch) { return res.molochError(403, 'Need packet search privileges'); }
   updateHuntStatus(req, res, 'paused', 'Paused hunt item successfully', 'Error pausing hunt job');
 });
 
-app.put('/hunt/:id/play', logAction('hunt'), checkCookieToken, checkHuntAccess, function (req, res) {
+app.put('/hunt/:id/play', logAction('hunt/:id/play'), checkCookieToken, checkHuntAccess, function (req, res) {
   if (Config.get('multiES', false)) { return res.molochError(401, 'Not supported in multies'); }
   if (!req.user.packetSearch) { return res.molochError(403, 'Need packet search privileges'); }
   updateHuntStatus(req, res, 'queued', 'Queued hunt item successfully', 'Error starting hunt job');
@@ -6171,8 +6750,6 @@ app.get('/:nodeName/hunt/:huntId/remote/:sessionId', function (req, res) {
                Db.get(Db.sid2Index(sessionId), 'session', Db.sid2Id(sessionId))])
     .then(([hunt, session]) => {
       if (hunt.error || session.error) { res.send({ matched: false }); }
-
-      let matched = false;
 
       hunt = hunt._source;
       session = session._source;
@@ -6328,7 +6905,7 @@ function scrubList(req, res, entire, list) {
     },
     function () {
       // Get from remote DISK
-      let path = fields.node + (entire?"/delete/":"/scrub/") + item._id;
+      let path = fields.node + (entire?"/delete/":"/scrub/") + Db.session2Sid(item);
       makeRequest(fields.node, path, req.user, function (err, response) {
         setImmediate(nextCb);
       });
@@ -6541,11 +7118,12 @@ function sendSessionsList(req, res, list) {
 
   async.eachLimit(list, 10, function(item, nextCb) {
     var fields = item._source || item.fields;
+    let sid = Db.session2Sid(item);
     isLocalView(fields.node, function () {
       var options = {
         user: req.user,
         cluster: req.body.cluster,
-        id: item._id,
+        id: sid,
         saveId: saveId,
         tags: req.body.tags,
         nodeName: fields.node
@@ -6554,7 +7132,7 @@ function sendSessionsList(req, res, list) {
       internals.sendSessionQueue.push(options, nextCb);
     },
     function () {
-      let path = `${fields.node}/sendSession/${item._id}?saveId=${saveId}&cluster=${req.body.cluster}`;
+      let path = `${fields.node}/sendSession/${sid}?saveId=${saveId}&cluster=${req.body.cluster}`;
       if (req.body.tags) {
         path += `&tags=${req.body.tags}`;
       }
@@ -6812,7 +7390,7 @@ app.post('/upload', multer({dest:'/tmp'}).single('file'), function (req, res) {
      .replace('{CONFIG}', Config.getConfigFile());
 
   console.log('upload command: ', cmd);
-  child = exec(cmd, function (error, stdout, stderr) {
+  exec(cmd, function (error, stdout, stderr) {
     if (error !== null) {
       console.log('<b>exec error: ' + error);
       res.status(500);
@@ -7084,14 +7662,10 @@ function processCronQueries() {
       // Delayed by the max Timeout
       var endTime = Math.floor(Date.now()/1000) - internals.cronTimeout;
 
-      // Save incase reload happens while running
-      var molochClusters = Config.configMap("moloch-clusters");
-
       // Go thru the queries, fetch the user, make the query
       async.eachSeries(Object.keys(queries), function (qid, forQueriesCb) {
         var cq = queries[qid];
         var cluster = null;
-        var req, res;
 
         if (Config.debug > 1) {
           console.log("CRON - Running", qid, cq);
@@ -7153,21 +7727,32 @@ function processCronQueries() {
                 console.log("CRON - setting lpValue", new Date(lpValue*1000));
               }
               // Do the ES update
-              var document = {
+              let document = {
                 doc: {
                   lpValue: lpValue,
                   lastRun: Math.floor(Date.now()/1000),
                   count: (queries[qid].count || 0) + count
                 }
               };
-              Db.update("queries", "query", qid, document, {refresh: true}, function () {
-                // If there is more time to catch up on, repeat the loop, although other queries
-                // will get processed first to be fair
-                if (lpValue !== endTime) {
-                  repeat = true;
-                }
-                return forQueriesCb();
-              });
+
+              function continueProcess () {
+                Db.update('queries', 'query', qid, document, { refresh: true }, function () {
+                  // If there is more time to catch up on, repeat the loop, although other queries
+                  // will get processed first to be fair
+                  if (lpValue !== endTime) { repeat = true; }
+                  return forQueriesCb();
+                });
+              }
+
+              // issue alert via notifier if the count has changed and it has been at least 10 minutes
+              if (cq.notifier && count && queries[qid].count !== document.doc.count &&
+                (!cq.lastNotified || (Math.floor(Date.now()/1000) - cq.lastNotified >= 600))) {
+                let newMatchCount = document.doc.lastNotifiedCount ? (document.doc.count - document.doc.lastNotifiedCount) : document.doc.count;
+                let message = `*${cq.name}* cron query match alert:\n*${newMatchCount} new* matches\n*${document.doc.count} total* matches`;
+                issueAlert(cq.notifier, message, continueProcess);
+              } else {
+                return continueProcess();
+              }
             });
           });
         });
@@ -7200,9 +7785,9 @@ function main () {
     internals.clusterName = health.cluster_name;
   });
 
-  Db.nodesStats({metric: "fs"}, function (err, info) {
+  Db.nodesStats({metric: 'jvm,process,fs,os,indices,thread_pool'}, function (err, info) {
     info.nodes.timestamp = new Date().getTime();
-    internals.previousNodeStats.push(info.nodes);
+    internals.previousNodesStats.push(info.nodes);
   });
 
   expireCheckAll();

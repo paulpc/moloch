@@ -147,6 +147,29 @@ my ($json) = @_;
                 }
             }
         }
+        if (exists $body->{dns} && exists $body->{dns}->{nameserverIp}) {
+            for (my $i = 0; $i < @{$body->{dns}->{nameserverIp}}; $i++) {
+                if ($body->{dns}->{nameserverIp}[$i] =~ /:/) {
+                    $body->{dns}->{nameserverIp}[$i] = join ":", (unpack("H*", inet_pton(AF_INET6, $body->{dns}->{nameserverIp}[$i])) =~ m/(....)/g );
+                }
+            }
+        }
+        if (exists $body->{dns} && exists $body->{dns}->{mailserverIp}) {
+            for (my $i = 0; $i < @{$body->{dns}->{mailserverIp}}; $i++) {
+                if ($body->{dns}->{mailserverIp}[$i] =~ /:/) {
+                    $body->{dns}->{mailserverIp}[$i] = join ":", (unpack("H*", inet_pton(AF_INET6, $body->{dns}->{mailserverIp}[$i])) =~ m/(....)/g );
+                }
+            }
+        }
+        if (exists $body->{cert}) {
+            for (my $i = 0; $i < @{$body->{cert}}; $i++) {
+                if ($body->{cert}->[$i]->{remainingDays} < 0) {
+                    $body->{cert}->[$i]->{remainingDays} = -1;
+                } elsif ($body->{cert}->[$i]->{remainingDays} > 0) {
+                    $body->{cert}->[$i]->{remainingDays} = 1;
+                }
+            }
+        }
     }
 
     @{$json->{sessions2}} = sort {$a->{body}->{firstPacket} <=> $b->{body}->{firstPacket}} @{$json->{sessions2}};
@@ -202,14 +225,14 @@ my ($cmd) = @_;
         $main::userAgent->post("http://localhost:8123/flushCache");
         print ("Starting viewer\n");
         if ($main::debug) {
-            system("cd ../capture/plugins/wiseService ; node wiseService.js -c ../../../tests/config.test.ini > /tmp/moloch.wise &");
+            system("cd ../wiseService ; node wiseService.js -c ../tests/config.test.ini > /tmp/moloch.wise &");
             system("cd ../viewer ; node --trace-warnings multies.js -c ../tests/config.test.ini -n all --debug > /tmp/multies.all &");
             system("cd ../viewer ; node --trace-warnings viewer.js -c ../tests/config.test.ini -n test --debug > /tmp/moloch.test &");
             system("cd ../viewer ; node --trace-warnings viewer.js -c ../tests/config.test.ini -n test2 --debug > /tmp/moloch.test2 &");
             system("cd ../viewer ; node --trace-warnings viewer.js -c ../tests/config.test.ini -n all --debug > /tmp/moloch.all &");
             system("cd ../parliament ; node --trace-warnings parliament.js --regressionTests -c /dev/null --debug > /tmp/moloch.parliament 2>&1 &");
         } else {
-            system("cd ../capture/plugins/wiseService ; node wiseService.js -c ../../../tests/config.test.ini > /dev/null &");
+            system("cd ../wiseService ; node wiseService.js -c ../tests/config.test.ini > /dev/null &");
             system("cd ../viewer ; node multies.js -c ../tests/config.test.ini -n all > /dev/null &");
             system("cd ../viewer ; node viewer.js -c ../tests/config.test.ini -n test > /dev/null &");
             system("cd ../viewer ; node viewer.js -c ../tests/config.test.ini -n test2 > /dev/null &");
@@ -240,9 +263,9 @@ my ($cmd) = @_;
 
         # Start Wise
         if ($main::debug) {
-            system("cd ../capture/plugins/wiseService ; node wiseService.js -c ../../../tests/config.test.ini > /tmp/moloch.wise &");
+            system("cd ../wiseService ; node wiseService.js -c ../tests/config.test.ini > /tmp/moloch.wise &");
         } else {
-            system("cd ../capture/plugins/wiseService ; node wiseService.js -c ../../../tests/config.test.ini > /dev/null &");
+            system("cd ../wiseService ; node wiseService.js -c ../tests/config.test.ini > /dev/null &");
         }
 
         waitFor($MolochTest::host, 8081);

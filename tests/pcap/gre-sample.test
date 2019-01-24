@@ -114,6 +114,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:veIAhY2jaBSkfqgIosmVNpCkTpE=",
             "dstASN" : "AS3 Massachusetts Institute of Technology",
             "dstBytes" : 114,
             "dstDataBytes" : 106,
@@ -204,6 +205,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:GvEAhAEKkdnTWFCXuw7HpDevs2w=",
             "dstBytes" : 2579,
             "dstDataBytes" : 1671,
             "dstIp" : "172.28.2.3",
@@ -238,6 +240,7 @@
                "ARIN",
                "ARIN"
             ],
+            "initRTT" : 22,
             "ipProtocol" : 6,
             "lastPacket" : 1055289981914,
             "length" : 3157,
@@ -315,6 +318,14 @@
             "srcPort" : 40264,
             "srcRIR" : "ARIN",
             "ssh" : {
+               "hassh" : [
+                  "5ef6678a6b060094834599ca16581b05"
+               ],
+               "hasshCnt" : 1,
+               "hasshServer" : [
+                  "6e3242d64766f4154c11858bbd654415"
+               ],
+               "hasshServerCnt" : 1,
                "key" : [
                   "AAAAB3NzaC1yc2EAAAABIwAAAIEApsEyRdoxEZ/Xmehe9Oo6s0uuroriAKOqim32L2V9DZbzt101U41iUHjI8ESaANQZd73O7uop7tIfK6ZMq/cshMcuuI1YxqYxCBuCFLsiomlYq7+7cURJEClVtSyPmtijvhnaJKAlN4P3iXZDCnUQkKrWC+XhBZT8E5DxSSIRAhk="
                ],
@@ -354,6 +365,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:07ZQAeEnPuTfz/AxZbb/1SQ0Yvk=",
             "dns" : {
                "host" : [
                   "www.gleeble.org"
@@ -459,6 +471,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:tHxGdFYxUdQ1mRGmcwzADwdsxpk=",
             "dstASN" : "AS11590 Cumberland Technologies International",
             "dstBytes" : 114,
             "dstDataBytes" : 106,
@@ -549,6 +562,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:KjznBxr7r/2kBYUhYhbnV4xMJmc=",
             "dstASN" : "AS10755 Dartmouth College",
             "dstBytes" : 114,
             "dstDataBytes" : 106,

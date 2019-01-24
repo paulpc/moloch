@@ -8,14 +8,19 @@
                   "issuerCN" : [
                      "aol member ca"
                   ],
-                  "issuerON" : "America Online Inc.",
+                  "issuerON" : [
+                     "America Online Inc."
+                  ],
                   "notAfter" : 1231995540000,
                   "notBefore" : 1168837200000,
+                  "remainingDays" : -1,
                   "serial" : "0119",
                   "subjectCN" : [
                      "kdc.uas.aol.com"
                   ],
-                  "subjectON" : "AOL LLC",
+                  "subjectON" : [
+                     "AOL LLC"
+                  ],
                   "validDays" : 730
                },
                {
@@ -23,14 +28,19 @@
                   "issuerCN" : [
                      "america online root certification authority 1"
                   ],
-                  "issuerON" : "America Online Inc.",
+                  "issuerON" : [
+                     "America Online Inc."
+                  ],
                   "notAfter" : 2142276180000,
                   "notBefore" : 1022565600000,
+                  "remainingDays" : 1,
                   "serial" : "01",
                   "subjectCN" : [
                      "america online root certification authority 1"
                   ],
-                  "subjectON" : "America Online Inc.",
+                  "subjectON" : [
+                     "America Online Inc."
+                  ],
                   "validDays" : 12959
                },
                {
@@ -38,18 +48,24 @@
                   "issuerCN" : [
                      "america online root certification authority 1"
                   ],
-                  "issuerON" : "America Online Inc.",
+                  "issuerON" : [
+                     "America Online Inc."
+                  ],
                   "notAfter" : 1875288399000,
                   "notBefore" : 1086369999000,
+                  "remainingDays" : 1,
                   "serial" : "07",
                   "subjectCN" : [
                      "aol member ca"
                   ],
-                  "subjectON" : "America Online Inc.",
+                  "subjectON" : [
+                     "America Online Inc."
+                  ],
                   "validDays" : 9131
                }
             ],
             "certCnt" : 3,
+            "communityId" : "1:C1UCMVQ0stzcOTtArGfbNxbT8e8=",
             "dstASN" : "AS1668 AOL Transit Data Network",
             "dstBytes" : 3596,
             "dstDataBytes" : 3282,
@@ -69,6 +85,7 @@
             "dstRIR" : "ARIN",
             "fileId" : [],
             "firstPacket" : 1193676055856,
+            "initRTT" : 47,
             "ipProtocol" : 6,
             "lastPacket" : 1193676056235,
             "length" : 380,
@@ -141,6 +158,10 @@
                "dstSessionId" : [
                   "dd709157b76b42f05802dfaa6501a55ec5a2a62c2c2ec856f1fcbc1cc8dc5717"
                ],
+               "ja3s" : [
+                  "1f8f5a3d2fd435e36084db890693eafd"
+               ],
+               "ja3sCnt" : 1,
                "version" : [
                   "SSLv3"
                ],

@@ -2,6 +2,7 @@
    "sessions2" : [
       {
          "body" : {
+            "communityId" : "1:OUrJ0XfBMwQ/wtfDj/bTOuUMkNE=",
             "dstBytes" : 78,
             "dstDataBytes" : 0,
             "dstIp" : "10.10.10.11",
@@ -18,6 +19,7 @@
             "dstPort" : 27017,
             "fileId" : [],
             "firstPacket" : 1483459978959,
+            "initRTT" : 171,
             "ipProtocol" : 6,
             "lastPacket" : 1483459979301,
             "length" : 343,
@@ -90,6 +92,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:kP7Af9QB6VQVXDn0O/EJYiYvD20=",
             "dstBytes" : 78,
             "dstDataBytes" : 0,
             "dstIp" : "10.10.10.13",
@@ -108,6 +111,7 @@
             "dstPort" : 27017,
             "fileId" : [],
             "firstPacket" : 1483558834969,
+            "initRTT" : 80,
             "ipProtocol" : 6,
             "lastPacket" : 1483558835131,
             "length" : 163,
@@ -180,6 +184,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:FAv9P0Hxb6xe0bFwPailhuJ2C7A=",
             "dstBytes" : 78,
             "dstDataBytes" : 0,
             "dstIp" : "10.10.10.15",
@@ -195,6 +200,7 @@
             "dstPort" : 27017,
             "fileId" : [],
             "firstPacket" : 1483726705497,
+            "initRTT" : 3,
             "ipProtocol" : 6,
             "lastPacket" : 1483726705503,
             "length" : 6,
@@ -260,6 +266,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:JqA03AM5KTYsed7SvUcArxX55kM=",
             "dstBytes" : 78,
             "dstDataBytes" : 0,
             "dstIp" : "10.10.10.17",
@@ -275,6 +282,7 @@
             "dstPort" : 27017,
             "fileId" : [],
             "firstPacket" : 1483737232974,
+            "initRTT" : 2,
             "ipProtocol" : 6,
             "lastPacket" : 1483737232979,
             "length" : 5,
@@ -341,6 +349,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:GWQtm0em+R21AYJfxszqjrBBnG4=",
             "dstBytes" : 156,
             "dstDataBytes" : 0,
             "dstIp" : "10.10.10.19",
@@ -356,6 +365,7 @@
             "dstPort" : 30000,
             "fileId" : [],
             "firstPacket" : 1483814916005,
+            "initRTT" : 51,
             "ipProtocol" : 6,
             "lastPacket" : 1483814916108,
             "length" : 103,

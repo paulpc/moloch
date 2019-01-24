@@ -2,7 +2,7 @@
 
   <div class="container-fluid">
 
-    <moloch-loading v-if="loading && !error">
+    <moloch-loading v-if="initialLoading && !error">
     </moloch-loading>
 
     <moloch-error v-if="error"
@@ -11,36 +11,10 @@
 
     <div v-show="!error">
 
-      <div class="input-group input-group-sm node-search pull-right mt-1">
-        <div class="input-group-prepend">
-          <span class="input-group-text input-group-text-fw">
-            <span v-if="!shiftKeyHold"
-              class="fa fa-search fa-fw">
-            </span>
-            <span v-else
-              class="query-shortcut">
-              Q
-            </span>
-          </span>
-        </div>
-        <input type="text"
-          class="form-control"
-          v-model="query.filter"
-          v-focus-input="focusInput"
-          @blur="onOffFocus"
-          @input="searchForNodes"
-          placeholder="Begin typing to search for nodes by name"
-        />
-        <span class="input-group-append">
-          <button type="button"
-            @click="clear"
-            :disabled="!query.filter"
-            class="btn btn-outline-secondary btn-clear-input">
-            <span class="fa fa-close">
-            </span>
-          </button>
-        </span>
-      </div>
+      <span v-b-tooltip.hover.left
+        class="fa fa-lg fa-question-circle-o cursor-help mt-2 pull-right"
+        title="HINT: These graphs are 1440 pixels wide. Expand your browser window to at least 1500 pixels wide for best viewing.">
+      </span>
 
       <moloch-paging v-if="stats"
         class="mt-1"
@@ -86,10 +60,8 @@ import MolochPaging from '../utils/Pagination';
 import MolochError from '../utils/Error';
 import MolochLoading from '../utils/Loading';
 import MolochTable from '../utils/Table';
-import FocusInput from '../utils/FocusInput';
 
 let reqPromise; // promise returned from setInterval for recurring requests
-let searchInputTimeout; // timeout to debounce the search input
 let respondedAt; // the time that the last data load succesfully responded
 
 function roundCommaString (val) {
@@ -99,7 +71,15 @@ function roundCommaString (val) {
 
 export default {
   name: 'NodeStats',
-  props: [ 'user', 'graphType', 'graphInterval', 'graphHide', 'dataInterval', 'refreshData' ],
+  props: [
+    'user',
+    'graphType',
+    'graphInterval',
+    'graphHide',
+    'dataInterval',
+    'refreshData',
+    'searchTerm'
+  ],
   components: {
     ToggleBtn,
     MolochPaging,
@@ -107,11 +87,10 @@ export default {
     MolochLoading,
     MolochTable
   },
-  directives: { FocusInput },
   data: function () {
     return {
       error: '',
-      loading: true,
+      initialLoading: true,
       stats: null,
       recordsTotal: undefined,
       recordsFiltered: undefined,
@@ -122,7 +101,7 @@ export default {
       query: {
         length: parseInt(this.$route.query.length) || 100,
         start: 0,
-        filter: null,
+        filter: this.searchTerm || undefined,
         sortField: 'nodeName',
         desc: true,
         hide: this.graphHide || 'none'
@@ -144,6 +123,8 @@ export default {
         { id: 'deltaDropped', name: 'Packet Drops/s', sort: 'deltaDropped', dataField: 'deltaDroppedPerSec', width: 130, dataFunction: roundCommaString, default: true, doStats: true },
         // all the rest of the available stats
         { id: 'deltaBitsPerSec', name: 'Bits/Sec', sort: 'deltaBitsPerSec', dataField: 'deltaBitsPerSec', width: 100, dataFunction: roundCommaString, doStats: true },
+        { id: 'deltaWrittenBytes', name: 'Written Bytes/s', sort: 'deltaWrittenBytes', dataField: 'deltaWrittenBytesPerSec', width: 100, dataFunction: (val) => { return this.$options.filters.humanReadableBytes(val); }, doStats: true },
+        { id: 'deltaUnwrittenBytes', name: 'Unwritten Bytes/s', sort: 'deltaUnwrittenBytes', dataField: 'deltaUnwrittenBytesPerSec', width: 100, dataFunction: (val) => { return this.$options.filters.humanReadableBytes(val); }, doStats: true },
         { id: 'tcpSessions', name: 'Active TCP Sessions', sort: 'tcpSessions', dataField: 'tcpSessions', width: 100, dataFunction: roundCommaString, doStats: true },
         { id: 'udpSessions', name: 'Active UDP Sessions', sort: 'udpSessions', dataField: 'udpSessions', width: 100, dataFunction: roundCommaString, doStats: true },
         { id: 'icmpSessions', name: 'Active ICMP Sessions', sort: 'icmpSessions', dataField: 'icmpSessions', width: 100, dataFunction: roundCommaString, doStats: true },
@@ -177,16 +158,13 @@ export default {
       let secondaryDark = styles.getPropertyValue('--color-tertiary-darker').trim();
       return [primaryDark, primary, primaryLight, primaryLighter, secondaryLighter, secondaryLight, secondary, secondaryDark];
     },
-    focusInput: {
+    loading: {
       get: function () {
-        return this.$store.state.focusSearch;
+        return this.$store.state.loadingData;
       },
       set: function (newValue) {
-        this.$store.commit('setFocusSearch', newValue);
+        this.$store.commit('setLoadingData', newValue);
       }
-    },
-    shiftKeyHold: function () {
-      return this.$store.state.shiftKeyHold;
     }
   },
   watch: {
@@ -247,25 +225,10 @@ export default {
 
       this.loadData();
     },
-    searchForNodes () {
-      if (searchInputTimeout) { clearTimeout(searchInputTimeout); }
-      // debounce the input so it only issues a request after keyups cease for 400ms
-      searchInputTimeout = setTimeout(() => {
-        searchInputTimeout = null;
-        this.loadData();
-      }, 400);
-    },
-    clear () {
-      this.query.filter = undefined;
-      this.loadData();
-    },
     columnClick (name) {
       this.query.sortField = name;
       this.query.desc = !this.query.desc;
       this.loadData();
-    },
-    onOffFocus: function () {
-      this.focusInput = false;
     },
     /* helper functions ---------------------------------------------------- */
     setRequestInterval: function () {
@@ -276,7 +239,10 @@ export default {
       }, 500);
     },
     loadData: function (sortField, desc) {
+      this.loading = true;
       respondedAt = undefined;
+
+      this.query.filter = this.searchTerm;
 
       if (desc !== undefined) { this.query.desc = desc; }
       if (sortField) { this.query.sortField = sortField; }
@@ -286,13 +252,15 @@ export default {
           respondedAt = Date.now();
           this.error = '';
           this.loading = false;
+          this.initialLoading = false;
           this.stats = response.data.data;
           this.recordsTotal = response.data.recordsTotal;
           this.recordsFiltered = response.data.recordsFiltered;
         }, (error) => {
           respondedAt = undefined;
           this.loading = false;
-          this.error = error;
+          this.initialLoading = false;
+          this.error = error.text || error;
         });
     },
     toggleStatDetail: function (stat) {

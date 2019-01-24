@@ -132,14 +132,19 @@ else
 fi
 
 ################################################################################
-mkdir -p $MOLOCH_INSTALL_DIR/logs $MOLOCH_INSTALL_DIR/raw
-chown nobody $MOLOCH_INSTALL_DIR/logs $MOLOCH_INSTALL_DIR/raw
-chmod 0700 $MOLOCH_INSTALL_DIR/raw
+# re-create these directories after installation so they are not part of the package manifest
+CREATEDIRS="logs raw"
+for CREATEDIR in $CREATEDIRS; do
+    if [ ! -e $MOLOCH_INSTALL_DIR/$CREATEDIR ]; then
+        mkdir -m 0700 -p $MOLOCH_INSTALL_DIR/$CREATEDIR && \
+        chown nobody $MOLOCH_INSTALL_DIR/$CREATEDIR
+    fi
+done
 
 ################################################################################
 if [ "$MOLOCH_LOCALELASTICSEARCH" == "yes" ]; then
     echo "Moloch - Downloading and installing demo OSS version of Elasticsearch"
-    ES_VERSION=6.4.2
+    ES_VERSION=6.5.4
     if [ -f "/etc/redhat-release" ]; then
         yum install https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-oss-${ES_VERSION}.rpm
     else

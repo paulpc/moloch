@@ -10,6 +10,7 @@
                   ],
                   "notAfter" : 1738030709000,
                   "notBefore" : 1422670709000,
+                  "remainingDays" : 1,
                   "serial" : "008a07e08d4ab50a7b",
                   "subjectCN" : [
                      "ldap ssl test"
@@ -18,6 +19,7 @@
                }
             ],
             "certCnt" : 1,
+            "communityId" : "1:IkHJKD/fDcrb4ph0Zven4FrlFl4=",
             "dstBytes" : 3422,
             "dstDataBytes" : 2050,
             "dstIp" : "0000:0000:0000:0000:0000:0000:0000:0001",
@@ -34,6 +36,7 @@
             "dstPort" : 389,
             "fileId" : [],
             "firstPacket" : 1422673532664,
+            "initRTT" : 0,
             "ipProtocol" : 6,
             "lastPacket" : 1422673558484,
             "length" : 25820,
@@ -163,6 +166,10 @@
                   "3f8b7a5c41878630f67e660533be80fc"
                ],
                "ja3Cnt" : 1,
+               "ja3s" : [
+                  "573a9f3f80037fb40d481e2054def5bb"
+               ],
+               "ja3sCnt" : 1,
                "version" : [
                   "TLSv1.2"
                ],

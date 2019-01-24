@@ -2,6 +2,7 @@
    "sessions2" : [
       {
          "body" : {
+            "communityId" : "1:eMRxQSkNuVRbgi0elxmjkFvRujg=",
             "dstBytes" : 340,
             "dstDataBytes" : 2,
             "dstGEO" : "US",
@@ -19,6 +20,7 @@
             "dstPort" : 1080,
             "fileId" : [],
             "firstPacket" : 1386090517357,
+            "initRTT" : 0,
             "ipProtocol" : 6,
             "lastPacket" : 1386090517358,
             "length" : 1,
@@ -94,6 +96,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:vmrJEOq8kOdIymsIuFNweCr7WFo=",
             "dstBytes" : 408,
             "dstDataBytes" : 4,
             "dstGEO" : "US",
@@ -111,6 +114,7 @@
             "dstPort" : 1080,
             "fileId" : [],
             "firstPacket" : 1386090528538,
+            "initRTT" : 0,
             "ipProtocol" : 6,
             "lastPacket" : 1386090528547,
             "length" : 8,
@@ -200,6 +204,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:3SP/ANf6CUN3pV1WOn4Toh2a9e4=",
             "dstBytes" : 2141,
             "dstDataBytes" : 1605,
             "dstGEO" : "US",
@@ -317,6 +322,7 @@
                ],
                "useragentCnt" : 1
             },
+            "initRTT" : 0,
             "ipProtocol" : 6,
             "lastPacket" : 1386090534579,
             "length" : 153,

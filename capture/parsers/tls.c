@@ -21,6 +21,7 @@ LOCAL  int                   hostField;
 LOCAL  int                   verField;
 LOCAL  int                   cipherField;
 LOCAL  int                   ja3Field;
+LOCAL  int                   ja3sField;
 LOCAL  int                   srcIdField;
 LOCAL  int                   dstIdField;
 
@@ -66,12 +67,10 @@ LOCAL void tls_certinfo_process(MolochCertInfo_t *ci, BSB *bsb)
                     element->str = g_ascii_strdown((char*)value, alen);
                 DLL_PUSH_TAIL(s_, &ci->commonName, element);
             } else if (strcmp(lastOid, "2.5.4.10") == 0) {
-                if (ci->orgName) {
-                    LOG("Multiple orgName %s => %.*s", ci->orgName, alen, value);
-                    free(ci->orgName);
-                }
-                ci->orgUtf8 = atag == 12;
-                ci->orgName = g_strndup((char*)value, alen);
+                MolochString_t *element = MOLOCH_TYPE_ALLOC0(MolochString_t);
+                element->utf8 = atag == 12;
+                element->str = g_strndup((char*)value, alen);
+                DLL_PUSH_TAIL(s_, &ci->orgName, element);
             }
         }
     }
@@ -122,11 +121,24 @@ LOCAL void tls_alt_names(MolochCertsInfo_t *certs, BSB *bsb, char *lastOid)
             MolochString_t *element = MOLOCH_TYPE_ALLOC0(MolochString_t);
             element->str = g_ascii_strdown((char*)value, alen);
             element->len = alen;
+            element->utf8 = 1;
             DLL_PUSH_TAIL(s_, &certs->alt, element);
         }
     }
     lastOid[0] = 0;
     return;
+}
+/******************************************************************************/
+// https://tools.ietf.org/html/draft-davidben-tls-grease-00
+LOCAL int tls_is_grease_value(uint32_t val)
+{
+    if ((val & 0x0f) != 0x0a)
+        return 0;
+
+    if ((val & 0xff) != ((val >> 8) & 0xff))
+        return 0;
+
+    return 1;
 }
 /******************************************************************************/
 LOCAL void tls_process_server_hello(MolochSession_t *session, const unsigned char *data, int len)
@@ -197,6 +209,50 @@ LOCAL void tls_process_server_hello(MolochSession_t *session, const unsigned cha
     else {
         snprintf(str, sizeof(str), "0x%04x", cipher);
         moloch_field_string_add(cipherField, session, str, 6, TRUE);
+    }
+
+    BSB_IMPORT_skip(bsb, 1);
+
+
+    char ja3[30000];
+    BSB ja3bsb;
+    char eja3[10000];
+    BSB eja3bsb;
+
+    BSB_INIT(ja3bsb, ja3, sizeof(ja3));
+    BSB_INIT(eja3bsb, eja3, sizeof(eja3));
+
+    if (BSB_REMAINING(bsb) > 2) {
+        int etotlen = 0;
+        BSB_IMPORT_u16(bsb, etotlen);  // Extensions Length
+
+        etotlen = MIN(etotlen, BSB_REMAINING(bsb));
+
+        BSB ebsb;
+        BSB_INIT(ebsb, BSB_WORK_PTR(bsb), etotlen);
+
+        while (BSB_REMAINING(ebsb) > 0) {
+            int etype = 0, elen = 0;
+
+            BSB_IMPORT_u16 (ebsb, etype);
+            BSB_IMPORT_u16 (ebsb, elen);
+
+            if (etype != 10 && etype != 11)
+                BSB_EXPORT_sprintf(eja3bsb, "%d-", etype);
+
+            if (elen > BSB_REMAINING(ebsb))
+                break;
+
+            BSB_IMPORT_skip (ebsb, elen);
+        }
+        BSB_EXPORT_rewind(eja3bsb, 1); // Remove last -
+    }
+
+    BSB_EXPORT_sprintf(ja3bsb, "%d,%d,%.*s", ver, cipher, (int)BSB_LENGTH(eja3bsb), eja3);
+
+    gchar *md5 = g_compute_checksum_for_data(G_CHECKSUM_MD5, (guchar *)ja3, BSB_LENGTH(ja3bsb));
+    if (!moloch_field_string_add(ja3sField, session, md5, 32, FALSE)) {
+        g_free(md5);
     }
 }
 
@@ -305,7 +361,9 @@ LOCAL void tls_process_server_certificate(MolochSession_t *session, const unsign
         MolochCertsInfo_t *certs = MOLOCH_TYPE_ALLOC0(MolochCertsInfo_t);
         DLL_INIT(s_, &certs->alt);
         DLL_INIT(s_, &certs->subject.commonName);
+        DLL_INIT(s_, &certs->subject.orgName);
         DLL_INIT(s_, &certs->issuer.commonName);
+        DLL_INIT(s_, &certs->issuer.orgName);
 
         uint32_t       atag, alen, apc;
         unsigned char *value;
@@ -389,7 +447,6 @@ LOCAL void tls_process_server_certificate(MolochSession_t *session, const unsign
         if (BSB_REMAINING(bsb)) {
             if (!(value = moloch_parsers_asn_get_tlv(&bsb, &apc, &atag, &alen)))
                 {badreason = 10; goto bad_cert;}
-            BSB tbsb;
             BSB_INIT(tbsb, value, alen);
             char lastOid[100];
             lastOid[0] = 0;
@@ -399,8 +456,8 @@ LOCAL void tls_process_server_certificate(MolochSession_t *session, const unsign
         // no previous certs AND not a CA AND either no orgName or the same orgName AND the same 1 commonName
         if (!session->fields[certsField] &&
             !certs->isCA &&
-            ((certs->subject.orgName && certs->issuer.orgName && strcmp(certs->subject.orgName, certs->issuer.orgName) == 0) ||
-             (certs->subject.orgName == NULL && certs->issuer.orgName == NULL)) &&
+            ((certs->subject.orgName.s_count == 1 && certs->issuer.orgName.s_count == 1 && strcmp(certs->subject.orgName.s_next->str, certs->issuer.orgName.s_next->str) == 0) ||
+             (certs->subject.orgName.s_count == 0 && certs->issuer.orgName.s_count == 0)) &&
             certs->subject.commonName.s_count == 1 &&
             certs->issuer.commonName.s_count == 1 &&
             strcmp(certs->subject.commonName.s_next->str, certs->issuer.commonName.s_next->str) == 0) {
@@ -452,18 +509,6 @@ LOCAL int tls_process_server_handshake_record(MolochSession_t *session, const un
         BSB_IMPORT_skip(rbsb, hlen);
     }
     return 0;
-}
-/******************************************************************************/
-// https://tools.ietf.org/html/draft-davidben-tls-grease-00
-LOCAL int tls_is_grease_value(uint32_t val)
-{
-    if ((val & 0x0f) != 0x0a)
-        return 0;
-
-    if ((val & 0xff) != ((val >> 8) & 0xff))
-        return 0;
-
-    return 1;
 }
 /******************************************************************************/
 LOCAL void tls_process_client(MolochSession_t *session, const unsigned char *data, int len)
@@ -538,7 +583,7 @@ LOCAL void tls_process_client(MolochSession_t *session, const unsigned char *dat
                 BSB_IMPORT_u08(cbsb, skiplen);   // Compression Length
                 BSB_IMPORT_skip(cbsb, skiplen);  // Compressions
 
-                if (BSB_REMAINING(cbsb) > 2) {
+                if (BSB_REMAINING(cbsb) > 6) {
                     int etotlen = 0;
                     BSB_IMPORT_u16(cbsb, etotlen);  // Extensions Length
 
@@ -547,8 +592,8 @@ LOCAL void tls_process_client(MolochSession_t *session, const unsigned char *dat
                     BSB ebsb;
                     BSB_INIT(ebsb, BSB_WORK_PTR(cbsb), etotlen);
 
-                    while (BSB_REMAINING(ebsb) > 0) {
-                        int etype = 0, elen = 0;
+                    while (BSB_REMAINING(ebsb) > 4) {
+                        uint16_t etype = 0, elen = 0;
 
                         BSB_IMPORT_u16 (ebsb, etype);
                         BSB_IMPORT_u16 (ebsb, elen);
@@ -583,9 +628,9 @@ LOCAL void tls_process_client(MolochSession_t *session, const unsigned char *dat
                             BSB_INIT(bsb, BSB_WORK_PTR(ebsb), elen);
                             BSB_IMPORT_skip (ebsb, elen);
 
-                            int len = 0;
+                            uint16_t len = 0;
                             BSB_IMPORT_u16(bsb, len); // list len
-                            while (len) {
+                            while (len > 0 && !BSB_IS_ERROR(bsb)) {
                                 uint16_t c = 0;
                                 BSB_IMPORT_u16(bsb, c);
                                 if (!tls_is_grease_value(c)) {
@@ -769,23 +814,27 @@ void moloch_parser_init()
         0, MOLOCH_FIELD_FLAG_FAKE,
         (char *)NULL);
 
-    moloch_field_define("cert", "seconds",
+    moloch_field_define("cert", "date",
         "cert.notbefore", "Not Before", "cert.notBefore",
         "Certificate is not valid before this date",
         0, MOLOCH_FIELD_FLAG_FAKE,
-        "type2", "date",
         (char *)NULL);
 
-    moloch_field_define("cert", "seconds",
+    moloch_field_define("cert", "date",
         "cert.notafter", "Not After", "cert.notAfter",
         "Certificate is not valid after this date",
         0, MOLOCH_FIELD_FLAG_FAKE,
-        "type2", "date",
         (char *)NULL);
 
     moloch_field_define("cert", "integer",
         "cert.validfor", "Days Valid For", "cert.validDays",
-        "Certificate is valid for this may days",
+        "Certificate is valid for this many days total",
+        0, MOLOCH_FIELD_FLAG_FAKE,
+        (char *)NULL);
+
+    moloch_field_define("cert", "integer",
+        "cert.remainingDays", "Days remaining", "cert.remainingDays",
+        "Certificate is still valid for this many days",
         0, MOLOCH_FIELD_FLAG_FAKE,
         (char *)NULL);
 
@@ -806,6 +855,12 @@ void moloch_parser_init()
     ja3Field = moloch_field_define("tls", "lotermfield",
         "tls.ja3", "JA3", "tls.ja3",
         "SSL/TLS JA3 field",
+        MOLOCH_FIELD_TYPE_STR_HASH,  MOLOCH_FIELD_FLAG_CNT,
+        (char *)NULL);
+
+    ja3sField = moloch_field_define("tls", "lotermfield",
+        "tls.ja3s", "JA3S", "tls.ja3s",
+        "SSL/TLS JA3S field",
         MOLOCH_FIELD_TYPE_STR_HASH,  MOLOCH_FIELD_FLAG_CNT,
         (char *)NULL);
 

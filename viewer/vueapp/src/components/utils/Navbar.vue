@@ -10,17 +10,18 @@
     </b-navbar-toggle>
 
     <b-navbar-brand>
-      <a :href="'help#' + activePage"
-        class="cursor-pointer"
-        id="helpTooltipContainer">
-        <img src="../../assets/logo.png"
-          class="moloch-logo"
-          alt="hoot"
-          v-b-tooltip.hover
-          title="HOOT! Can I help you? Click me to see the help page"
-          id="tooltipHelp"
-        />
-      </a>
+      <router-link
+        :to="{ path: helpLink.href, query: helpLink.query, params: { nav: true } }">
+        <div id="helpTooltipContainer">
+          <img src="../../assets/logo.png"
+            class="moloch-logo"
+            alt="hoot"
+            v-b-tooltip.hover
+            title="HOOT! Can I help you? Click me to see the help page"
+            id="tooltipHelp"
+          />
+        </div>
+      </router-link>
       <b-tooltip :show="shiftKeyHold"
         triggers=""
         target="tooltipHelp"
@@ -93,8 +94,8 @@ export default {
         spiview: { title: 'SPI View', link: 'spiview', hotkey: ['SPI ', 'View'] },
         spigraph: { title: 'SPI Graph', link: 'spigraph', hotkey: ['SPI ', 'Graph'] },
         connections: { title: 'Connections', link: 'connections', hotkey: ['Connections'] },
-        files: { title: 'Files', link: 'files' },
-        stats: { title: 'Stats', link: 'stats' },
+        files: { title: 'Files', link: 'files', permission: 'hideFiles', reverse: true },
+        stats: { title: 'Stats', link: 'stats', permission: 'hideStats', reverse: true },
         upload: { title: 'Upload', link: 'upload', permission: 'canUpload' }
       };
 
@@ -118,16 +119,39 @@ export default {
           expression: this.$store.state.expression
         };
 
+        // update the start/stop time if they have not been updated
+        if ((this.$store.state.time.startTime !== this.$route.query.startTime ||
+          this.$store.state.time.stopTime !== this.$route.query.stopTime) &&
+          this.$store.state.timeRange === '0') {
+          item.query.startTime = this.$store.state.time.startTime;
+          item.query.stopTime = this.$store.state.time.stopTime;
+          item.query.date = undefined;
+        }
+
         // determine if user can view menu item
         // this can't be done with the has-permission directive because
         // a sibling of this component might update the user (Users.vue)
         if (this.user) {
           item.hasPermission = !item.permission ||
-            (this.user.hasOwnProperty(item.permission) && this.user[item.permission]);
+            (this.user.hasOwnProperty(item.permission) && this.user[item.permission] && !item.reverse) ||
+            (!this.user.hasOwnProperty(item.permission) || (!this.user[item.permission] && item.reverse));
         }
       }
 
       return menu;
+    },
+    helpLink: function () {
+      let helpLink = {
+        href: `help?${qs.stringify(this.$route.query)}`,
+        query: {
+          ...this.$route.query,
+          expression: this.$store.state.expression
+        }
+      };
+      if (this.activePage) {
+        helpLink.href += `#${this.activePage}`;
+      }
+      return helpLink;
     },
     activePage: function () {
       for (let page in this.menu) {

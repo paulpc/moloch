@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div v-if="compatibleBrowser">
     <moloch-navbar></moloch-navbar>
     <router-view v-if="user" />
     <transition name="shortcuts-slide">
@@ -14,12 +14,17 @@
     </transition>
     <moloch-footer></moloch-footer>
   </div>
+  <div v-else>
+    <moloch-upgrade-browser>
+    </moloch-upgrade-browser>
+  </div>
 </template>
 
 <script>
 import UserService from './components/users/UserService';
 import MolochNavbar from './components/utils/Navbar';
 import MolochFooter from './components/utils/Footer';
+import MolochUpgradeBrowser from './components/utils/UpgradeBrowser';
 import MolochKeyboardShortcuts from './components/utils/KeyboardShortcuts';
 
 export default {
@@ -27,7 +32,13 @@ export default {
   components: {
     MolochNavbar,
     MolochFooter,
+    MolochUpgradeBrowser,
     MolochKeyboardShortcuts
+  },
+  data: function () {
+    return {
+      compatibleBrowser: true
+    };
   },
   computed: {
     shiftKeyHold: {
@@ -56,6 +67,14 @@ export default {
     }
   },
   mounted: function () {
+    this.compatibleBrowser = (typeof Object['__defineSetter__'] === 'function') &&
+      !!String.prototype.includes;
+
+    if (!this.compatibleBrowser) {
+      console.log('Incompatible browser, please upgrade!');
+      return;
+    }
+
     // get the current user for the entire app
     // the rest of the app should compute the user with $store.state.user
     UserService.getCurrent()
@@ -152,7 +171,19 @@ export default {
       }
       if (event.keyCode === 16) { // shift
         this.shiftKeyHold = true;
+      } else if (event.keyCode === 27) { // esc
+        this.shiftKeyHold = false;
       }
+    });
+
+    // if the user clicks something, remove shift hold
+    window.addEventListener('mousedown', (event) => {
+      this.shiftKeyHold = false;
+    });
+
+    // if the user focus is not in the web page, remove shift hold
+    window.addEventListener('blur', (event) => {
+      this.shiftKeyHold = false;
     });
   },
   methods: {
@@ -453,6 +484,13 @@ dl.dl-horizontal dd {
   margin-left: 205px;
   margin-bottom: 0;
 }
+dl.dl-horizontal.dl-horizontal-wide dt {
+  width: 400px;
+}
+dl.dl-horizontal.dl-horizontal-wide dd {
+  margin-left: 410px;
+  margin-bottom: 0;
+}
 
 .shortcut-help {
   position: fixed;
@@ -507,5 +545,53 @@ dl.dl-horizontal dd {
   position: relative;
   top: -2px;
   right: 6px;
+}
+
+/* custom font awesome icons */
+.fa.fa-venn {
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+  width: 1.28571429em;
+  text-align: center;
+}
+.fa.fa-venn > span.fa-circle-o {
+  position: absolute;
+  top: -7px;
+}
+.fa.fa-venn> span.fa-circle-o:first-child {
+  left: 5px;
+}
+.fa.fa-venn> span.fa-circle-o:last-child {
+  right: 6px;
+}
+
+/* info page (404 & upgrade) */
+.moloch-info {
+  margin-top: 20px;
+}
+
+.moloch-info .center-area > img {
+  z-index: 99;
+}
+
+.moloch-info .center-area {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  flex-direction: column;
+  min-height: 75vh;
+}
+
+.moloch-info .well {
+  margin-top: -6px;
+  min-width: 25%;
+  box-shadow: 4px 4px 10px 0 rgba(0,0,0,0.5);
+}
+
+.moloch-info .well > h1 {
+  margin-top: 0;
+  color: var(--color-primary);
 }
 </style>

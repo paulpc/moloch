@@ -1,4 +1,4 @@
-AC_INIT([moloch], [1.6.1-GIT])
+AC_INIT([moloch], [1.7.1-GIT])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 AC_PROG_CC
 AC_PROG_CXX
@@ -21,6 +21,7 @@ AC_CONFIG_FILES([
   viewer/version.js
   parliament/Makefile
   release/Makefile
+  wiseService/Makefile
 ])
 
 AC_CHECK_LIB(pcre, main,,AC_MSG_ERROR(please install PCRE library))

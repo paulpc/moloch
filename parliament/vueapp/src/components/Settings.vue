@@ -113,6 +113,7 @@
           </div>
           <div class="row"
             v-if="settings.general">
+            <!-- out of date -->
             <div class="col-xl-9 col-lg-12 form-group">
               <div class="input-group">
                 <span class="input-group-prepend">
@@ -138,7 +139,8 @@
                 <strong>Out Of Date</strong>
                 issue will be added to the node's cluster.
               </p>
-            </div>
+            </div> <!-- /out of date -->
+            <!-- es query timeout -->
             <div class="col-xl-9 col-lg-12 form-group">
               <div class="input-group">
                 <span class="input-group-prepend">
@@ -164,7 +166,62 @@
                 <strong>ES Down</strong>
                 issue if no response is received within the specified time.
               </p>
-            </div>
+            </div> <!-- /es query timeout -->
+            <!-- low packets -->
+            <div class="col-xl-9 col-lg-12 form-group">
+              <div class="row">
+                <div class="col-8 input-group">
+                  <span class="input-group-prepend">
+                    <span class="input-group-text">
+                      Low Packets Threshold
+                    </span>
+                  </span>
+                  <input type="number"
+                    class="form-control"
+                    id="noPackets"
+                    @input="debounceInput"
+                    v-model="settings.general.noPackets"
+                    max="100000"
+                    min="-1"
+                  />
+                  <span class="input-group-append">
+                    <span class="input-group-text">
+                      packets
+                    </span>
+                  </span>
+                </div>
+                <div class="col-4 input-group">
+                  <span class="input-group-prepend">
+                    <span class="input-group-text">
+                      If persisting for
+                    </span>
+                  </span>
+                  <input type="number"
+                    class="form-control"
+                    id="noPacketsLength"
+                    @input="debounceInput"
+                    v-model="settings.general.noPacketsLength"
+                    max="100000"
+                    min="1"
+                  />
+                  <span class="input-group-append">
+                    <span class="input-group-text">
+                      seconds
+                    </span>
+                  </span>
+                </div>
+              </div>
+              <p class="form-text small text-muted">
+                Adds a
+                <strong>Low Packets</strong>
+                issue to the cluster if the capture node is receiving
+                fewer packets than this value for the specified length of time.
+                <strong>
+                  Set this to -1 if you wish to ignore this issue.
+                </strong>
+              </p>
+            </div> <!-- /low packets -->
+            <!-- remove issues after -->
             <div class="col-xl-9 col-lg-12 form-group">
               <div class="input-group">
                 <span class="input-group-prepend">
@@ -188,7 +245,8 @@
               <p class="form-text small text-muted">
                 Removes issues that have not been seen again after the specified time.
               </p>
-            </div>
+            </div> <!-- /remove issues after -->
+            <!-- remove acknowledged issues after -->
             <div class="col-xl-9 col-lg-12 form-group">
               <div class="input-group">
                 <span class="input-group-prepend">
@@ -213,7 +271,7 @@
                 Removes <strong>acknowledged</strong>
                 issues that have not been seen again after the specified time.
               </p>
-            </div>
+            </div> <!-- /remove acknowledged issues after -->
           </div>
         </div>
         <!-- /general -->
@@ -226,7 +284,7 @@
             <span v-if="passwordChanged"
               class="pull-right">
               <!-- cancel password update button -->
-              <a @click="cancelChangePassword()"
+              <a @click="cancelChangePassword"
                 class="btn btn-outline-warning cursor-pointer">
                 <span class="fa fa-ban">
                 </span>&nbsp;
@@ -234,7 +292,7 @@
               </a> <!-- /cancel password update button -->
               <!-- update/create password button -->
               <a v-if="(hasAuth && loggedIn) || !hasAuth"
-                @click="updatePassword()"
+                @click="updatePassword"
                 class="btn btn-outline-success cursor-pointer mr-1 ml-1">
                 <span class="fa fa-key"></span>
                 <span v-if="hasAuth && loggedIn">
@@ -256,7 +314,7 @@
               </span>
             </span>
             <input class="form-control"
-              @keyup.enter="updatePassword()"
+              @keyup.enter="updatePassword"
               name="currentPassword"
               @input="passwordChanged = true"
               v-model="currentPassword"
@@ -271,7 +329,7 @@
             </span>
             <input class="form-control"
               name="newPassword"
-              @keyup.enter="updatePassword()"
+              @keyup.enter="updatePassword"
               @input="passwordChanged = true"
               v-model="newPassword"
               type="password"
@@ -285,7 +343,7 @@
             </span>
             <input class="form-control"
               name="newPasswordConfirm"
-              @keyup.enter="updatePassword()"
+              @keyup.enter="updatePassword"
               @input="passwordChanged = true"
               v-model="newPasswordConfirm"
               type="password"
@@ -293,13 +351,44 @@
           </div>
         </div> <!-- /password -->
 
-        <!-- notifiers -->
+        <!-- notifiers tab -->
         <div v-if="visibleTab === 'notifiers' && hasAuth && loggedIn && settings"
           class="col">
           <h3>
             Notifiers
           </h3>
           <hr>
+          <!-- hostname -->
+          <div class="row form-group">
+            <div class="col-12">
+              <div class="input-group">
+                <span class="input-group-prepend">
+                  <span class="input-group-text">
+                    Parliament Hostname
+                  </span>
+                </span>
+                <input type="text"
+                  class="form-control"
+                  id="hostname"
+                  @input="debounceInput"
+                  v-model="settings.general.hostname"
+                />
+                <span class="input-group-append">
+                  <span class="input-group-text">
+                    <input type="checkbox"
+                      @input="debounceInput"
+                      v-model="settings.general.includeUrl"
+                    />
+                    &nbsp; include parliament dashboard url in notifications
+                  </span>
+                </span>
+              </div>
+              <p class="form-text small text-muted">
+                Configure the Parliament's hostname to add a link to the Parliament Dashbaord to every alert
+              </p>
+            </div>
+          </div> <!-- /hostname -->
+          <!-- notifiers -->
           <div class="row"
             v-if="settings.notifiers">
             <div class="col-12 col-xl-6"
@@ -399,8 +488,8 @@
                 </div>
               </div>
             </div>
-          </div>
-        </div> <!-- /notifiers -->
+          </div> <!-- notifiers -->
+        </div> <!-- /notifiers tab -->
 
       </div> <!-- /page content -->
 
@@ -494,6 +583,16 @@ export default {
       this.success = '';
       if (successCloseTimeout) { clearTimeout(successCloseTimeout); }
 
+      if (this.settings.general.noPackets === '' || this.settings.general.noPackets === undefined ||
+        this.settings.general.noPackets > 100000 || this.settings.general.noPackets < -1) {
+        this.settingsError = 'Low packets threshold must contain a number between -1 and 100,000.';
+        return;
+      }
+      if (!this.settings.general.noPacketsLength || this.settings.general.noPacketsLength > 100000 ||
+          this.settings.general.noPacketsLength < 1) {
+        this.settingsError = 'Low packets time threshold must contain a number between 1 and 100,000.';
+        return;
+      }
       if (!this.settings.general.outOfDate || this.settings.general.outOfDate > 3600) {
         this.settingsError = 'Capture node\'s checkin must contain a number less than or equal to 3600 seconds (1 hour)';
         return;

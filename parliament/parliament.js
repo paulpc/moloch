@@ -3,7 +3,6 @@
 
 /* dependencies ------------------------------------------------------------- */
 const express = require('express');
-const path    = require('path');
 const http    = require('http');
 const https   = require('https');
 const fs      = require('fs');
@@ -14,6 +13,7 @@ const logger  = require('morgan');
 const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcrypt');
 const glob    = require('glob');
+const os      = require('os');
 
 /* app setup --------------------------------------------------------------- */
 const app     = express();
@@ -26,11 +26,13 @@ const issueTypes = {
   esDown: { on: true, name: 'ES Down', text: ' ES is down', severity: 'red', description: 'ES is unreachable' },
   esDropped: { on: true, name: 'ES Dropped', text: 'ES is dropping bulk inserts', severity: 'yellow', description: 'the capture node is overloading ES' },
   outOfDate: { on: true, name: 'Out of Date', text: 'has not checked in since', severity: 'red', description: 'the capture node has not checked in' },
-  noPackets: { on: true, name: 'No Packets', text: 'is not receiving packets', severity: 'red', description: 'the capture node is not receiving packets' }
+  noPackets: { on: true, name: 'Low Packets', text: 'is not receiving many packets', severity: 'red', description: 'the capture node is not receiving many packets' }
 };
 
 const settingsDefault = {
   general : {
+    noPackets: 0,
+    noPacketsLength: 10,
     outOfDate: 30,
     esQueryTimeout: 5,
     removeIssuesAfter: 60,
@@ -133,7 +135,7 @@ if (app.get('regressionTests')) {
   app.post('/shutdown', function (req, res) {
     process.exit(0);
   });
-};
+}
 
 // get the parliament file or create it if it doesn't exist
 let parliament;
@@ -174,6 +176,12 @@ try {
 let groupId = 0;
 let clusterId = 0;
 
+// save noPackets issues so that the time of issue can be compared to the
+// noPacketsLength user setting (only issue alerts when the time the issue
+// was encounterd exceeds the noPacketsLength user setting)
+let noPacketsMap = {};
+
+// super secret
 app.disable('x-powered-by');
 
 // expose vue bundles (prod)
@@ -206,7 +214,7 @@ function loadNotifiers () {
   };
 
   // look for all notifier providers and initialize them
-  let files = glob.sync(path.join(__dirname, '/notifiers/provider.*.js'));
+  let files = glob.sync(`${__dirname}/../notifiers/provider.*.js`);
   files.forEach((file) => {
     let plugin = require(file);
     plugin.init(api);
@@ -282,14 +290,21 @@ async function sendAlerts () {
         // timeout so that alerts are alerted in order
         setTimeout(() => {
           let alert = alerts[i];
-          alert.notifier.sendAlert(alert.config, alert.message);
+          let links = [];
+          if (parliament.settings.general.includeUrl) {
+            links.push({
+              text: 'Parliament Dashboard',
+              url: `${parliament.settings.general.hostname}?searchTerm=${alert.cluster}`
+            });
+          }
+          alert.notifier.sendAlert(alert.config, alert.message, links);
           if (app.get('debug')) {
             console.log('Sending alert:', alert.message, JSON.stringify(alert.config, null, 2));
           }
           if (i === len - 1) { resolve(); }
         }, 250 * i);
       })(i);
-    };
+    }
   });
 
   promise.then(() => {
@@ -316,7 +331,7 @@ function formatIssueMessage (cluster, issue) {
 
   message += `${issue.text}`;
 
-  if (issue.value) {
+  if (issue.value !== undefined) {
     let value = ': ';
 
     if (issue.type === 'esDropped') {
@@ -366,7 +381,8 @@ function buildAlert (cluster, issue) {
     alerts.push({
       config: config,
       message: message,
-      notifier: notifier
+      notifier: notifier,
+      cluster: cluster.title
     });
   }
 }
@@ -501,7 +517,7 @@ function getStats (cluster) {
     let timeout = getGeneralSetting('esQueryTimeout') * 1000;
 
     let options = {
-      url: `${cluster.localUrl || cluster.url}/stats.json`,
+      url: `${cluster.localUrl || cluster.url}/parliament.json`,
       method: 'GET',
       rejectUnauthorized: false,
       timeout: timeout
@@ -557,7 +573,6 @@ function getStats (cluster) {
           }
 
           // Look for issues
-
           if ((now - stat.currentTime) > outOfDate) {
             setIssue(cluster, {
               type  : 'outOfDate',
@@ -566,11 +581,24 @@ function getStats (cluster) {
             });
           }
 
-          if (stat.deltaPacketsPerSec === 0) {
-            setIssue(cluster, {
-              type: 'noPackets',
-              node: stat.nodeName
-            });
+          // look for no packets issue
+          if (stat.deltaPacketsPerSec <= getGeneralSetting('noPackets')) {
+            let now = Date.now();
+            let id = cluster.title + stat.nodeName;
+
+            // only set the noPackets issue if there is a record of this cluster/node
+            // having noPackets and that issue has persisted for the set length of time
+            if (noPacketsMap[id] &&
+              now - noPacketsMap[id] >= (getGeneralSetting('noPacketsLength') * 1000)) {
+              setIssue(cluster, {
+                type: 'noPackets',
+                node: stat.nodeName,
+                value: stat.deltaPacketsPerSec
+              });
+            } else if (!noPacketsMap[id]) {
+              // if this issue has not been encountered yet, make a record of it
+              noPacketsMap[id] = Date.now();
+            }
           }
 
           if (stat.deltaESDroppedPerSec > 0) {
@@ -687,6 +715,12 @@ function initializeParliament () {
     if (!parliament.settings.general.outOfDate) {
       parliament.settings.general.outOfDate = settingsDefault.general.outOfDate;
     }
+    if (!parliament.settings.general.noPackets) {
+      parliament.settings.general.noPackets = settingsDefault.general.noPackets;
+    }
+    if (!parliament.settings.general.noPacketsLength) {
+      parliament.settings.general.noPacketsLength = settingsDefault.general.noPacketsLength;
+    }
     if (!parliament.settings.general.esQueryTimeout) {
       parliament.settings.general.esQueryTimeout = settingsDefault.general.esQueryTimeout;
     }
@@ -695,6 +729,9 @@ function initializeParliament () {
     }
     if (!parliament.settings.general.removeAcknowledgedAfter) {
       parliament.settings.general.removeAcknowledgedAfter = settingsDefault.general.removeAcknowledgedAfter;
+    }
+    if (!parliament.settings.general.hostname) {
+      parliament.settings.general.hostname = os.hostname();
     }
 
     if (app.get('debug')) {
@@ -810,6 +847,27 @@ function cleanUpIssues () {
   }
 
   return issuesRemoved;
+}
+
+function removeIssue (issueType, clusterId, nodeId) {
+  let foundIssue = false;
+  let len = issues.length;
+
+  while (len--) {
+    const issue = issues[len];
+    if (issue.clusterId === parseInt(clusterId) &&
+      issue.type === issueType &&
+      issue.node === nodeId) {
+      foundIssue = true;
+      issues.splice(len, 1);
+      if (issue.type === 'noPackets') {
+        // also remove it from the no packets record
+        delete noPacketsMap[issue.cluster + nodeId];
+      }
+    }
+  }
+
+  return foundIssue;
 }
 
 function getGeneralSetting (type) {
@@ -1049,13 +1107,14 @@ router.put('/settings', verifyToken, (req, res, next) => {
 
   // save general settings
   for (let s in req.body.settings.general) {
-    const setting = req.body.settings.general[s];
-    if (isNaN(setting)) {
+    let setting = req.body.settings.general[s];
+    if (s !== 'hostname' && s !== 'includeUrl' && isNaN(setting)) {
       const error = new Error(`${s} must be a number.`);
       error.httpStatusCode = 422;
       return next(error);
     }
-    parliament.settings.general[s] = parseInt(setting);
+    if (s !== 'hostname' && s !== 'includeUrl') { setting = parseInt(setting); }
+    parliament.settings.general[s] = setting;
   }
 
   let successObj  = { success: true, text: 'Successfully updated your settings.' };
@@ -1355,6 +1414,18 @@ router.get('/issues', (req, res, next) => {
   // filter out provisional issues
   issuesClone = issuesClone.filter((issue) => !issue.provisional);
 
+  if (req.query.filter) { // simple search for issues
+    let searchTerm = req.query.filter.toLowerCase();
+    issuesClone = issuesClone.filter((issue) => {
+      return issue.severity.toLowerCase().includes(searchTerm) ||
+        issue.cluster.toLowerCase().includes(searchTerm) ||
+        issue.message.toLowerCase().includes(searchTerm) ||
+        issue.title.toLowerCase().includes(searchTerm) ||
+        issue.node.toLowerCase().includes(searchTerm) ||
+        issue.text.toLowerCase().includes(searchTerm);
+    });
+  }
+
   let type = 'string';
   let sortBy = req.query.sort;
   if (sortBy === 'ignoreUntil' ||
@@ -1387,7 +1458,19 @@ router.get('/issues', (req, res, next) => {
     });
   }
 
-  return res.json({ issues: issuesClone });
+  let recordsFiltered = issuesClone.length;
+
+  if (req.query.length) { // paging
+    let len = parseInt(req.query.length);
+    let start = !req.query.start ? 0 : parseInt(req.query.start);
+
+    issuesClone = issuesClone.slice(start, len + start);
+  }
+
+  return res.json({
+    issues: issuesClone,
+    recordsFiltered: recordsFiltered
+  });
 });
 
 // acknowledge one or more issues
@@ -1519,17 +1602,7 @@ router.put('/groups/:groupId/clusters/:clusterId/removeIssue', verifyToken, (req
     return next(error);
   }
 
-  let foundIssue = false;
-  let len = issues.length;
-  while (len--) {
-    const issue = issues[len];
-    if (issue.clusterId === parseInt(req.params.clusterId) &&
-      issue.type === req.body.type &&
-      issue.node === req.body.node) {
-      foundIssue = true;
-      issues.splice(len, 1);
-    }
-  }
+  let foundIssue = removeIssue(req.body.type, req.params.clusterId, req.body.node);
 
   if (!foundIssue) {
     const error = new Error('Unable to find issue to remove. Maybe it was already removed.');
@@ -1561,7 +1634,7 @@ router.put('/issues/removeAllAcknowledgedIssues', verifyToken, (req, res, next) 
     return next(error);
   }
 
-  let successObj  = { success:true, text:`Successfully removed ${count} acknowledged issues.`, issues:issues };
+  let successObj  = { success:true, text:`Successfully removed ${count} acknowledged issues.` };
   let errorText   = 'Unable to remove acknowledged issues.';
   writeIssues(req, res, next, successObj, errorText, true);
 });

@@ -1,4 +1,4 @@
-use Test::More tests => 48;
+use Test::More tests => 62;
 use Cwd;
 use URI::Escape;
 use MolochTest;
@@ -37,6 +37,13 @@ my $test1Token = getTokenCookie("test1");
     my $dstats = viewerGet("/dstats.json?nodeName=test&start=1399680425&stop=1399680460&step=5&interval=5&name=deltaPackets");
     is (@{$dstats}, 7, "dstats.json array size");
 
+# esstats.json
+    my $esstats = viewerGet("/esstats.json");
+    is ($esstats->{data}->[0]->{writesRejectedDelta}, 0, "Writes reject");
+
+    my $messtats = multiGet("/esstats.json");
+    is ($messtats->{data}->[0]->{writesRejectedDelta}, 0, "Writes reject");
+
 # esindices
     my $indices = viewerGet("/esindices/list");
     cmp_ok (@{$indices}, ">=", 30, "indices array size");
@@ -56,11 +63,14 @@ my $test1Token = getTokenCookie("test1");
     cmp_ok (@{$tasks}, ">=", 1, "tasks array size");
 
 # esshards
-    my $shards = viewerGet("/esshard/list");
+    my $shards = viewerGet("/esshard/list?show=all");
     cmp_ok (@{$shards->{indices}}, ">=", 30, "esshards: indices array size");
     cmp_ok ($shards->{indices}->[0]->{name}, "lt", $shards->{indices}->[1]->{name}, "esshard: index[0] before index[1]");
     eq_or_diff($shards->{nodeExcludes}, [], "esshard: nodeExcludes empty");
     eq_or_diff($shards->{ipExcludes}, [], "esshard: ipExcludes empty");
+
+    my $shards = viewerGet("/esshard/list?show=notstarted");
+    cmp_ok (@{$shards->{indices}}, "==", 0, "esshards: indices array size");
 
     my $result = viewerPost("/esshard/exclude/ip/1.2.3.4", "");
     eq_or_diff($result, from_json('{"success": false, "text": "Missing token"}'), "esshard: exclude no token");
@@ -99,3 +109,25 @@ my $test1Token = getTokenCookie("test1");
     $shards = viewerGet("/esshard/list");
     eq_or_diff($shards->{nodeExcludes}, [], "esshard: nodeExcludes empty");
     eq_or_diff($shards->{ipExcludes}, [], "esshard: ipExcludes empty");
+
+# esrecovery
+    my $recovery = viewerGet("/esrecovery/list?show=all");
+    cmp_ok (@{$recovery}, ">=", 100, "tasks array size");
+
+    $recovery = viewerGet("/esrecovery/list");
+    cmp_ok (@{$recovery}, "==", 0, "tasks array size");
+
+    $recovery = viewerGet("/esrecovery/list?show=notdone");
+    cmp_ok (@{$recovery}, "==", 0, "tasks array size");
+
+# parliament.json
+    my $stats = viewerGet("/parliament.json");
+    is (@{$stats->{data}}, 1, "parliament.json data set ");
+    is ($stats->{recordsTotal}, 1, "parliament.json recordsTotal");
+    is ($stats->{data}->[0]->{id}, "test", "parliament.json name");
+
+    foreach my $i ("deltaBytesPerSec", "deltaPacketsPerSec", "deltaESDroppedPerSec", "deltaTotalDroppedPerSec") {
+        is (exists $stats->{data}->[0]->{$i}, 1, "parliament.json $i");
+    }
+
+    is (exists $stats->{data}->[0]->{"totalPackets"}, "", "parliament.json doesn't have unnecessary fields");

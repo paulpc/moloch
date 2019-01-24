@@ -160,14 +160,19 @@
                   "issuerCN" : [
                      "digicert high assurance ca-3"
                   ],
-                  "issuerON" : "DigiCert Inc",
+                  "issuerON" : [
+                     "DigiCert Inc"
+                  ],
                   "notAfter" : 1418212800000,
                   "notBefore" : 1317600000000,
+                  "remainingDays" : -1,
                   "serial" : "062d488986c9a6d7f94901c2b5906882",
                   "subjectCN" : [
                      "gp1.wac.edgecastcdn.net"
                   ],
-                  "subjectON" : "EdgeCast Networks, Inc.",
+                  "subjectON" : [
+                     "EdgeCast Networks, Inc."
+                  ],
                   "validDays" : 1164
                },
                {
@@ -175,18 +180,24 @@
                   "issuerCN" : [
                      "digicert high assurance ev root ca"
                   ],
-                  "issuerON" : "DigiCert Inc",
+                  "issuerON" : [
+                     "DigiCert Inc"
+                  ],
                   "notAfter" : 1648944000000,
                   "notBefore" : 1207137600000,
+                  "remainingDays" : 1,
                   "serial" : "0a5f114d035b179117d2efd4038c3f3b",
                   "subjectCN" : [
                      "digicert high assurance ca-3"
                   ],
-                  "subjectON" : "DigiCert Inc",
+                  "subjectON" : [
+                     "DigiCert Inc"
+                  ],
                   "validDays" : 5113
                }
             ],
             "certCnt" : 2,
+            "communityId" : "1:mKawWPl/vbyo+D8YOO/ybLJJIhQ=",
             "dstBytes" : 9145,
             "dstDataBytes" : 8279,
             "dstGEO" : "US",
@@ -210,6 +221,7 @@
                ],
                "hostCnt" : 1
             },
+            "initRTT" : 0,
             "ipProtocol" : 6,
             "lastPacket" : 1386004472629,
             "length" : 57,
@@ -331,6 +343,10 @@
                   "06a92bf69b367389d2feb0d70501ddfe"
                ],
                "ja3Cnt" : 1,
+               "ja3s" : [
+                  "280ca4511bfaa384b2e931c058e8816e"
+               ],
+               "ja3sCnt" : 1,
                "version" : [
                   "TLSv1"
                ],
@@ -507,14 +523,19 @@
                   "issuerCN" : [
                      "digicert high assurance ca-3"
                   ],
-                  "issuerON" : "DigiCert Inc",
+                  "issuerON" : [
+                     "DigiCert Inc"
+                  ],
                   "notAfter" : 1418212800000,
                   "notBefore" : 1317600000000,
+                  "remainingDays" : -1,
                   "serial" : "062d488986c9a6d7f94901c2b5906882",
                   "subjectCN" : [
                      "gp1.wac.edgecastcdn.net"
                   ],
-                  "subjectON" : "EdgeCast Networks, Inc.",
+                  "subjectON" : [
+                     "EdgeCast Networks, Inc."
+                  ],
                   "validDays" : 1164
                },
                {
@@ -522,18 +543,24 @@
                   "issuerCN" : [
                      "digicert high assurance ev root ca"
                   ],
-                  "issuerON" : "DigiCert Inc",
+                  "issuerON" : [
+                     "DigiCert Inc"
+                  ],
                   "notAfter" : 1648944000000,
                   "notBefore" : 1207137600000,
+                  "remainingDays" : 1,
                   "serial" : "0a5f114d035b179117d2efd4038c3f3b",
                   "subjectCN" : [
                      "digicert high assurance ca-3"
                   ],
-                  "subjectON" : "DigiCert Inc",
+                  "subjectON" : [
+                     "DigiCert Inc"
+                  ],
                   "validDays" : 5113
                }
             ],
             "certCnt" : 2,
+            "communityId" : "1:QFSWpQ4ebG5/0YcprIWXFTWEzvI=",
             "dstBytes" : 9120,
             "dstDataBytes" : 8254,
             "dstGEO" : "US",
@@ -557,6 +584,7 @@
                ],
                "hostCnt" : 1
             },
+            "initRTT" : 0,
             "ipProtocol" : 6,
             "lastPacket" : 1386004475761,
             "length" : 69,
@@ -675,6 +703,10 @@
                   "06a92bf69b367389d2feb0d70501ddfe"
                ],
                "ja3Cnt" : 1,
+               "ja3s" : [
+                  "280ca4511bfaa384b2e931c058e8816e"
+               ],
+               "ja3sCnt" : 1,
                "version" : [
                   "TLSv1"
                ],
@@ -851,14 +883,19 @@
                   "issuerCN" : [
                      "digicert high assurance ca-3"
                   ],
-                  "issuerON" : "DigiCert Inc",
+                  "issuerON" : [
+                     "DigiCert Inc"
+                  ],
                   "notAfter" : 1418212800000,
                   "notBefore" : 1317600000000,
+                  "remainingDays" : -1,
                   "serial" : "062d488986c9a6d7f94901c2b5906882",
                   "subjectCN" : [
                      "gp1.wac.edgecastcdn.net"
                   ],
-                  "subjectON" : "EdgeCast Networks, Inc.",
+                  "subjectON" : [
+                     "EdgeCast Networks, Inc."
+                  ],
                   "validDays" : 1164
                },
                {
@@ -866,18 +903,24 @@
                   "issuerCN" : [
                      "digicert high assurance ev root ca"
                   ],
-                  "issuerON" : "DigiCert Inc",
+                  "issuerON" : [
+                     "DigiCert Inc"
+                  ],
                   "notAfter" : 1648944000000,
                   "notBefore" : 1207137600000,
+                  "remainingDays" : 1,
                   "serial" : "0a5f114d035b179117d2efd4038c3f3b",
                   "subjectCN" : [
                      "digicert high assurance ca-3"
                   ],
-                  "subjectON" : "DigiCert Inc",
+                  "subjectON" : [
+                     "DigiCert Inc"
+                  ],
                   "validDays" : 5113
                }
             ],
             "certCnt" : 2,
+            "communityId" : "1:FU35c9jWM24tS4OJPq+kgps1akw=",
             "dstBytes" : 9215,
             "dstDataBytes" : 8283,
             "dstGEO" : "US",
@@ -901,6 +944,7 @@
                ],
                "hostCnt" : 1
             },
+            "initRTT" : 0,
             "ipProtocol" : 6,
             "lastPacket" : 1386004480888,
             "length" : 35,
@@ -1028,6 +1072,10 @@
                   "06a92bf69b367389d2feb0d70501ddfe"
                ],
                "ja3Cnt" : 1,
+               "ja3s" : [
+                  "280ca4511bfaa384b2e931c058e8816e"
+               ],
+               "ja3sCnt" : 1,
                "version" : [
                   "TLSv1"
                ],

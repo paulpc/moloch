@@ -1,8 +1,8 @@
 <template>
 
-  <div class="container-fluid">
+  <div class="container-fluid mt-2">
 
-    <moloch-loading v-if="loading && !error">
+    <moloch-loading v-if="initialLoading && !error">
     </moloch-loading>
 
     <moloch-error v-if="error"
@@ -10,37 +10,6 @@
     </moloch-error>
 
     <div v-show="!error">
-
-      <div class="input-group input-group-sm mt-1 mb-1">
-        <div class="input-group-prepend">
-          <span class="input-group-text input-group-text-fw">
-            <span v-if="!shiftKeyHold"
-              class="fa fa-search fa-fw">
-            </span>
-            <span v-else
-              class="query-shortcut">
-              Q
-            </span>
-          </span>
-        </div>
-        <input type="text"
-          class="form-control"
-          v-model="query.filter"
-          v-focus-input="focusInput"
-          @blur="onOffFocus"
-          @input="searchForES"
-          placeholder="Begin typing to search for ES nodes (hint: this input accepts regex)"
-        />
-        <span class="input-group-append">
-          <button type="button"
-            @click="clear"
-            :disabled="!query.filter"
-            class="btn btn-outline-secondary btn-clear-input">
-            <span class="fa fa-close">
-            </span>
-          </button>
-        </span>
-      </div>
 
       <moloch-table
         id="esNodesTable"
@@ -93,10 +62,8 @@ import Vue from 'vue';
 import MolochError from '../utils/Error';
 import MolochLoading from '../utils/Loading';
 import MolochTable from '../utils/Table';
-import FocusInput from '../utils/FocusInput';
 
 let reqPromise; // promise returned from setInterval for recurring requests
-let searchInputTimeout; // timeout to debounce the search input
 let respondedAt; // the time that the last data load succesfully responded
 
 function roundCommaString (val) {
@@ -106,16 +73,15 @@ function roundCommaString (val) {
 
 export default {
   name: 'EsStats',
-  props: [ 'dataInterval', 'refreshData' ],
+  props: [ 'dataInterval', 'refreshData', 'searchTerm' ],
   components: { MolochError, MolochLoading, MolochTable },
-  directives: { FocusInput },
   data: function () {
     return {
       error: '',
-      loading: true,
+      initialLoading: true,
       stats: null,
       query: {
-        filter: null,
+        filter: this.searchTerm || undefined,
         sortField: 'nodeName',
         desc: false
       },
@@ -136,21 +102,23 @@ export default {
         { id: 'ipExcluded', name: 'IP Excluded', sort: 'ipExcluded', dataField: 'ipExcluded', doStats: false, width: 100 },
         { id: 'nodeExcluded', name: 'Node Excluded', sort: 'nodeExcluded', dataField: 'nodeExcluded', doStats: false, width: 125 },
         { id: 'nonHeapSize', name: 'Non Heap Size', sort: 'nonHeapSize', dataField: 'nonHeapSize', doStats: false, width: 100, dataFunction: (val) => { return this.$options.filters.humanReadableBytes(val); } },
-        { id: 'searchesTime', name: 'Searches timeout', sort: 'searchesTime', dataField: 'searchesTime', doStats: true, width: 100, dataFunction: roundCommaString }
+        { id: 'searchesTime', name: 'Search Time', sort: 'searchesTime', dataField: 'searchesTime', doStats: true, width: 100, dataFunction: roundCommaString },
+        { id: 'writesRejected', name: 'Write Tasks Rejected', sort: 'writesRejected', dataField: 'writesRejected', doStats: true, width: 100, dataFunction: roundCommaString },
+        { id: 'writesRejectedDelta', name: 'Write Tasks Rejected/s', sort: 'writesRejectedDelta', dataField: 'writesRejectedDelta', doStats: true, width: 100, dataFunction: roundCommaString },
+        { id: 'writesCompleted', name: 'Write Tasks Completed', sort: 'writesCompleted', dataField: 'writesCompleted', doStats: true, width: 100, dataFunction: roundCommaString },
+        { id: 'writesCompletedDelta', name: 'Write Tasks Completed/s', sort: 'writesCompletedDelta', dataField: 'writesCompletedDelta', doStats: true, width: 100, dataFunction: roundCommaString },
+        { id: 'writesQueueSize', name: 'Write Tasks Q Limit', sort: 'writesQueueSize', dataField: 'writesQueueSize', doStats: true, width: 100, dataFunction: roundCommaString }
       ]
     };
   },
   computed: {
-    focusInput: {
+    loading: {
       get: function () {
-        return this.$store.state.focusSearch;
+        return this.$store.state.loadingData;
       },
       set: function (newValue) {
-        this.$store.commit('setFocusSearch', newValue);
+        this.$store.commit('setLoadingData', newValue);
       }
-    },
-    shiftKeyHold: function () {
-      return this.$store.state.shiftKeyHold;
     }
   },
   watch: {
@@ -181,21 +149,6 @@ export default {
   },
   methods: {
     /* exposed page functions ------------------------------------ */
-    searchForES () {
-      if (searchInputTimeout) { clearTimeout(searchInputTimeout); }
-      // debounce the input so it only issues a request after keyups cease for 400ms
-      searchInputTimeout = setTimeout(() => {
-        searchInputTimeout = null;
-        this.loadData();
-      }, 400);
-    },
-    clear () {
-      this.query.filter = undefined;
-      this.loadData();
-    },
-    onOffFocus: function () {
-      this.focusInput = false;
-    },
     exclude: function (type, column) {
       this.$http.post(`esshard/exclude/${type}/${column[type]}`)
         .then((response) => {
@@ -229,7 +182,10 @@ export default {
       }, 500);
     },
     loadData: function (sortField, desc) {
+      this.loading = true;
       respondedAt = undefined;
+
+      this.query.filter = this.searchTerm;
 
       if (desc !== undefined) { this.query.desc = desc; }
       if (sortField) { this.query.sortField = sortField; }
@@ -239,11 +195,13 @@ export default {
           respondedAt = Date.now();
           this.error = '';
           this.loading = false;
+          this.initialLoading = false;
           this.stats = response.data.data;
         }, (error) => {
           respondedAt = undefined;
           this.loading = false;
-          this.error = error;
+          this.initialLoading = false;
+          this.error = error.text || error;
         });
     }
   },

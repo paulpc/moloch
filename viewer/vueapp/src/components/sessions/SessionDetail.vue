@@ -23,7 +23,7 @@
     </div> <!-- /detail -->
 
     <!-- packet options -->
-    <div v-show="!loading && !hidePackets"
+    <div v-show="!loading && !hidePackets && !user.hidePcap"
       class="packet-options mr-1 ml-1">
       <form class="form-inline mb-2 pt-2">
         <fieldset :disabled="hidePackets || loading || loadingPackets || errorPackets || renderingPackets">
@@ -186,7 +186,7 @@
     </div> <!-- /packet options -->
 
     <!-- packets loading -->
-    <div v-if="!loading && loadingPackets && !hidePackets"
+    <div v-if="!loading && loadingPackets && !hidePackets && !user.hidePcap"
       class="mt-4 mb-4 ml-2 mr-2 large">
       <span class="fa fa-spinner fa-spin">
       </span>&nbsp;
@@ -201,7 +201,7 @@
     </div> <!-- /packets loading -->
 
     <!-- packets rendering -->
-    <div v-if="!loading && renderingPackets && !hidePackets"
+    <div v-if="!loading && renderingPackets && !hidePackets && !user.hidePcap"
       class="mt-4 mb-4 ml-2 mr-2 large">
       <span class="fa fa-spinner fa-spin">
       </span>&nbsp;
@@ -226,7 +226,7 @@
     </div> <!-- /packets error -->
 
     <!-- packets -->
-    <div v-if="!loadingPackets && !errorPackets && !hidePackets"
+    <div v-if="!loadingPackets && !errorPackets && !hidePackets && !user.hidePcap"
       class="inner packet-container mr-1 ml-1"
       v-html="packetHtml"
       ref="packetContainer"
@@ -234,7 +234,7 @@
     </div> <!-- packets -->
 
     <!-- packet options -->
-    <div v-show="!loading && !loadingPackets && !errorPackets && !hidePackets"
+    <div v-show="!loading && !loadingPackets && !errorPackets && !hidePackets && !user.hidePcap"
       class="mr-1 ml-1">
       <form class="form-inline mb-2 pt-2">
         <fieldset :disabled="loading || loadingPackets || errorPackets || renderingPackets">
@@ -710,6 +710,20 @@ export default {
               showFewerItems: function (e) {
                 e.target.parentElement.style.display = 'none';
                 e.target.parentElement.nextElementSibling.style.display = 'inline-block';
+              },
+              /**
+               * Toggles a column in the sessions table
+               * @param {string} fieldID  The field id to toggle in the sessions table
+               */
+              toggleColVis: function (fieldID) {
+                this.$parent.toggleColVis(fieldID);
+              },
+              /**
+               * Toggles a field's visibility in the info column
+               * @param {string} fieldID  The field id to toggle in the info column
+               */
+              toggleInfoVis: function (fieldID) {
+                this.$parent.toggleInfoVis(fieldID);
               }
             },
             components: {
@@ -726,6 +740,12 @@ export default {
           this.loading = false;
           this.error = error;
         });
+    },
+    toggleColVis: function (fieldID) {
+      this.$emit('toggleColVis', fieldID);
+    },
+    toggleInfoVis: function (fieldID) {
+      this.$emit('toggleInfoVis', fieldID);
     },
     getMolochClusters: function () {
       ConfigService.getMolochClusters()
@@ -807,6 +827,9 @@ export default {
     },
     /* Gets the packets for the session from the server */
     getPackets: function () {
+      // if the user is not allowed to view packets, don't request them
+      if (this.user.hidePcap) { return; }
+
       // already loading, don't load again!
       if (this.loadingPackets || this.hidePackets) { return; }
 
@@ -856,6 +879,7 @@ export default {
 
           setTimeout(() => { // wait until session packets are rendered
             // tooltips for src/dst byte images
+            if (!this.$refs.packetContainer) { return; }
             let tss = this.$refs.packetContainer.getElementsByClassName('session-detail-ts');
             for (let i = 0; i < tss.length; ++i) {
               let timeEl = tss[i];
@@ -904,7 +928,7 @@ export default {
         })
         .catch((error) => {
           this.loadingPackets = false;
-          this.errorPackets = error;
+          this.errorPackets = error.text || error;
           this.packetPromise = undefined;
         });
     },
@@ -912,6 +936,10 @@ export default {
       this.$refs.packetContainer.getElementsByClassName('src-col-tip')[0].innerHTML = `Source Bytes:
         <br>
         <img src="${this.session.node}/raw/${this.session.id}.png?type=src">
+        <a class="btn small" href="${this.session.node}/raw/${this.session.id}.png?type=src" download="${this.session.id}-src.png">
+          <span class="fa fa-download"></span>&nbsp;
+          Download src bytes image
+        </button>
       `;
       this.$refs.packetContainer.getElementsByClassName('srccol')[0].removeEventListener('mouseenter', this.showSrcBytesImg);
     },
@@ -919,6 +947,10 @@ export default {
       this.$refs.packetContainer.getElementsByClassName('dst-col-tip')[0].innerHTML = `Destination Bytes:
         <br>
         <img src="${this.session.node}/raw/${this.session.id}.png?type=dst">
+        <a class="btn small" href="${this.session.node}/raw/${this.session.id}.png?type=dst" download="${this.session.id}-dst.png">
+          <span class="fa fa-download"></span>&nbsp;
+          Download dst bytes image
+        </button>
       `;
       this.$refs.packetContainer.getElementsByClassName('dstcol')[0].removeEventListener('mouseenter', this.showDstBytesImg);
     }
@@ -969,6 +1001,11 @@ export default {
 }
 
 /* image tooltips */
+.packet-container .srccol,
+.packet-container .dstcol {
+  padding-bottom: 10px;
+}
+
 .packet-container .srccol:hover,
 .packet-container .dstcol:hover,
 .packet-container .imagetag:hover {

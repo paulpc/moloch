@@ -149,8 +149,7 @@ LOCAL int wise_item_cmp(const void *keyv, const void *elementv)
 /******************************************************************************/
 LOCAL void wise_print_stats()
 {
-    int i;
-    for (i = 0; i < numTypes; i++) {
+    for (int i = 0; i < numTypes; i++) {
         LOG("%8s lookups:%7d cache:%7d requests:%7d inprogress:%7d fail:%7d hash:%7d list:%7d",
             types[i].name,
             stats[i][0],
@@ -203,15 +202,15 @@ LOCAL void wise_load_fields()
         LOGEXIT("Wise server is returning too many fields %d > %d", cnt, MOLOCH_FIELDS_DB_MAX);
     }
 
-    int i;
-    for (i = 0; i < cnt; i++) {
+    for (int i = 0; i < cnt; i++) {
         int len = 0;
         BSB_IMPORT_u16(bsb, len); // len includes NULL terminated
         fieldsMap[0][i] = moloch_field_define_text((char*)BSB_WORK_PTR(bsb), NULL);
-        if (fieldsMap[0][i] == -1)
+        if (fieldsMap[0][i] == -1) {
             fieldsTS = 0;
-        if (config.debug)
-            LOG("Couldn't define field - %d %d %s", i, fieldsMap[0][i], BSB_WORK_PTR(bsb));
+            if (config.debug)
+                LOG("Couldn't define field - %d %d %s", i, fieldsMap[0][i], BSB_WORK_PTR(bsb));
+        }
         BSB_IMPORT_skip(bsb, len);
     }
     free(data);
@@ -295,7 +294,6 @@ LOCAL void wise_cb(int UNUSED(code), unsigned char *data, int data_len, gpointer
         if (hashPos == FIELDS_MAP_MAX)
             LOGEXIT("Too many unique wise hashs");
 
-        int i;
         if (hashPos == fieldsMapCnt) {
             fieldsMapHash[hashPos] = g_strndup((gchar*)hash, 32);
             fieldsMapCnt++;
@@ -336,26 +334,23 @@ LOCAL void wise_cb(int UNUSED(code), unsigned char *data, int data_len, gpointer
         BSB_IMPORT_u08(bsb, numOps);
 
         moloch_field_ops_init(&wi->ops, numOps, MOLOCH_FIELD_OPS_FLAGS_COPY);
-        if (numOps > 0) {
-            int i;
-            for (i = 0; i < numOps; i++) {
+        for (int o = 0; o < numOps; o++) {
 
-                int rfield = 0;
-                BSB_IMPORT_u08(bsb, rfield);
-                int fieldPos = fieldsMap[hashPos][rfield];
+            int rfield = 0;
+            BSB_IMPORT_u08(bsb, rfield);
+            int fieldPos = fieldsMap[hashPos][rfield];
 
-                int len = 0;
-                BSB_IMPORT_u08(bsb, len);
-                char *str = (char*)BSB_WORK_PTR(bsb);
-                BSB_IMPORT_skip(bsb, len);
+            int len = 0;
+            BSB_IMPORT_u08(bsb, len);
+            char *str = (char*)BSB_WORK_PTR(bsb);
+            BSB_IMPORT_skip(bsb, len);
 
-                if (fieldPos == -1) {
-                    LOG("Couldn't find pos %d", rfield);
-                    continue;
-                }
-
-                moloch_field_ops_add(&wi->ops, fieldPos, str, len - 1);
+            if (fieldPos == -1) {
+                LOG("Couldn't find pos %d", rfield);
+                continue;
             }
+
+            moloch_field_ops_add(&wi->ops, fieldPos, str, len - 1);
         }
 
         wi->loadTime = currentTime.tv_sec;
@@ -513,8 +508,7 @@ LOCAL void wise_lookup_domain(MolochSession_t *session, WiseRequest_t *request, 
     }
 
     int l = strlen(domain);
-    int i;
-    for (i = 0; i < wiseExcludeDomainsNum; i++) {
+    for (int i = 0; i < wiseExcludeDomainsNum; i++) {
         if (l > wiseExcludeDomainsLen[i] && memcmp(domain + l - wiseExcludeDomainsLen[i], wiseExcludeDomains[i], wiseExcludeDomainsLen[i]) == 0) {
             goto cleanup;
         }
@@ -547,10 +541,6 @@ void wise_lookup_tuple(MolochSession_t *session, WiseRequest_t *request)
     BSB     bsb;
 
     BSB_INIT(bsb, str, sizeof(str));
-
-    uint32_t ip1 = MOLOCH_V6_TO_V4(session->addr1);
-    uint32_t ip2 = MOLOCH_V6_TO_V4(session->addr2);
-
     BSB_EXPORT_sprintf(bsb, "%ld;", session->firstPacket.tv_sec);
 
     int first = 1;
@@ -564,14 +554,35 @@ void wise_lookup_tuple(MolochSession_t *session, WiseRequest_t *request)
         }
         BSB_EXPORT_ptr(bsb, hstring->str, hstring->len);
     );
+    
+    if (IN6_IS_ADDR_V4MAPPED(&session->addr1)) {
+      
+      uint32_t ip1 = MOLOCH_V6_TO_V4(session->addr1);
+      uint32_t ip2 = MOLOCH_V6_TO_V4(session->addr2);
 
-    BSB_EXPORT_sprintf(bsb, ";%u.%u.%u.%u;%u;%u.%u.%u.%u;%u",
-                       ip1 & 0xff, (ip1 >> 8) & 0xff, (ip1 >> 16) & 0xff, (ip1 >> 24) & 0xff,
-                       session->port1,
-                       ip2 & 0xff, (ip2 >> 8) & 0xff, (ip2 >> 16) & 0xff, (ip2 >> 24) & 0xff,
-                       session->port2
-                      );
-
+      BSB_EXPORT_sprintf(bsb, ";%u.%u.%u.%u;%u;%u.%u.%u.%u;%u",
+                         ip1 & 0xff, (ip1 >> 8) & 0xff, (ip1 >> 16) & 0xff, (ip1 >> 24) & 0xff,
+                         session->port1,
+                         ip2 & 0xff, (ip2 >> 8) & 0xff, (ip2 >> 16) & 0xff, (ip2 >> 24) & 0xff,
+                         session->port2
+                        );
+    } else {
+      // inet_ntop(AF_INET6, ip6, ipstr, sizeof(ipstr));
+      char ipstr1[INET6_ADDRSTRLEN];
+      char ipstr2[INET6_ADDRSTRLEN];
+      
+      inet_ntop(AF_INET6, &session->addr1, ipstr1, sizeof(ipstr1));
+      inet_ntop(AF_INET6, &session->addr2, ipstr2, sizeof(ipstr2));
+      
+      BSB_EXPORT_sprintf(bsb, ";%s;%u;%s;%u",
+                         ipstr1,
+                         session->port1,
+                         ipstr2,
+                         session->port2
+                        );
+      
+      
+    }
     wise_lookup(session, request, str, INTEL_TYPE_TUPLE);
 }
 /******************************************************************************/
@@ -808,7 +819,6 @@ LOCAL void wise_load_config()
 
     for (i = 0; i < (int)keys_len; i++) {
         gchar **values = moloch_config_section_str_list(NULL, "wise-types", keys[i], NULL);
-        int type;
 
         if (strcmp(keys[i], "ip") == 0)
             type = INTEL_TYPE_IP;
@@ -860,6 +870,7 @@ LOCAL void wise_load_config()
 /******************************************************************************/
 void moloch_plugin_init()
 {
+    int i;
 
     if (config.dryRun) {
         LOG("Not enabling in dryRun mode");
@@ -882,7 +893,6 @@ void moloch_plugin_init()
 
     wise_load_config();
 
-    int i;
     wiseExcludeDomains = moloch_config_str_list(NULL, "wiseExcludeDomains", ".in-addr.arpa;.ip6.arpa");
     for (i = 0; wiseExcludeDomains[i]; i++);
     wiseExcludeDomainsNum = i;

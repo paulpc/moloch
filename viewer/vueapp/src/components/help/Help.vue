@@ -73,6 +73,12 @@
             </span>&nbsp;
             Connections
           </a>
+          <a href="help#hunt"
+            class="nav-link">
+            <span class="fa fa-fw fa-eye">
+            </span>&nbsp;
+            Hunt
+          </a>
           <a href="help#files"
             class="nav-link">
             <span class="fa fa-fw fa-files-o">
@@ -491,6 +497,50 @@
 
           <hr>
 
+          <h3 id="hunt">
+            <span class="fa fa-fw fa-eye"></span>&nbsp;
+            Hunt
+          </h3>
+          <p>
+            The Hunt page allows users to search within session packets for text.
+            To perform a hunt, users should start by narrowing down their search on the Sessions page.
+            Then, switch to the Hunt tab where any new hunt will only search within the sessions searched for earlier.
+            Underneath the search bar, the Hunt page will display the number of sessions that will be searched.
+            To begin your hunt, click on the "Create a packet search job" button on the top right of the page (under the search bar).
+            The form that is presented is described below:
+          </p>
+            <dl class="dl-horizontal dl-horizontal-wide">
+              <dt>Name</dt>
+              <dd>The name of the hunt (multiple hunts can have the same name)</dd>
+              <dt>Max number of packets to examine per session</dt>
+              <dd>The maximum number of packets that the hunt will search within each session</dd>
+              <dt>Search</dt>
+              <dd>The text to search for (ascii, case sensitive ascii, hex, regex, or hex regex)</dd>
+              <dt>Search src/dst packets</dt>
+              <dd>Whether to search source or destination packets, or both</dd>
+              <dt>Search raw/reassembled packets</dt>
+              <dd>Whether to search raw or reassembled packets</dd>
+            </dl>
+          <p>
+            Once the hunt has been created, it will be added to the <strong>hunt job queue</strong>. Hunts run one at a time and
+            can be paused so that another hunt can run. After a hunt has completed, it will be added to
+            the <strong>hunt job history</strong>. Here, you can rerun a hunt on a different set of sessions, open the
+            sessions that matched the hunt, or delete the hunt job from the history.
+          </p>
+          <p>
+            Hunts add <code>huntName</code> and <code>huntId</code> fields to the sessions as they match.
+            You can search for these fields in the sessions search bar at any time. Deleting a hunt from the history
+            does not remove these fields from the sessions.
+          </p>
+          <p>
+            <strong>Info:</strong> A normal user can only view/pause/delete their own hunts, but an admin can view/pause/delete all hunts.<br>
+            <strong>Warning:</strong> The packet search will take a long time and possibly slow down viewer if you search many sessions.
+            Users will be alerted if they are trying to search for more than 100,000 sessions. Normal users cannot search more than 1,000,000
+            sessions, and admins cannot search more than 10,000,000 sessions (these values can be overwritten in the config).
+          </p>
+
+          <hr>
+
           <h3 id="files">
             <span class="fa fa-fw fa-files-o"></span>&nbsp;
             Files
@@ -586,6 +636,10 @@
               <dd>Number of packets that were dropped because frag overload or timeouts</dd>
               <dt>Total Dropped/Sec</dt>
               <dd>Sum of the inputs dropped and overload metrics</dd>
+              <dt>Written Bytes/Sec</dt>
+              <dd>The size of all the packets that Moloch is going write to disk</dd>
+              <dt>Unritten Bytes/Sec</dt>
+              <dd>The size of all the packets that Moloch isn't going to write to disk, but that we processed</dd>
             </dl>
             <p>
               <em>
@@ -668,7 +722,7 @@
               ES Tasks
             </h6>
             <p>
-              The ESs Task tab displays a table containing information for each Elasticsearch task.
+              The ES Task tab displays a table containing information for each Elasticsearch task.
               Please use the column config drop down to change which fields are shown.
             </p>
             <dl class="dl-horizontal">
@@ -711,6 +765,61 @@
               <span class="badge badge-pill badge-primary">other color</span> means it's a primary shard.
               Hover over a cell to get more information.
             </p>
+            <h6>
+              <span class="fa fa-fw fa-line-chart"></span>&nbsp;
+              ES Recoveery
+            </h6>
+            <p>
+              The ES Recovery tab displays a table containing information for each Elasticsearch index
+              recovery.  By default it only shows information about indices still waiting to be recovered.
+              It is a simple view of the <code>/_cat/recovery</code> Elasticssearch API.
+            </p>
+            <dl class="dl-horizontal">
+              <dt>Index</dt>
+              <dd>The index name</dd>
+              <dt>Shard</dt>
+              <dd>The shard number</dd>
+              <dt>Time</dt>
+              <dd>The recovery time</dd>
+              <dt>Type</dt>
+              <dd>The recovery type</dd>
+              <dt>Stage</dt>
+              <dd>The recovery stage</dd>
+              <dt>Src Host</dt>
+              <dd>The source host</dd>
+              <dt>Src Node</dt>
+              <dd>The source node name</dd>
+              <dt>Dst Host</dt>
+              <dd>The target host</dd>
+              <dt>Dst Node</dt>
+              <dd>The target node name</dd>
+              <dt>Repository</dt>
+              <dd>The repository</dd>
+              <dt>Snapshot</dt>
+              <dd>The snapshot</dd>
+              <dt>Files</dt>
+              <dd>The number of files to recover</dd>
+              <dt>Files recovered</dt>
+              <dd>The files recovered</dd>
+              <dt>Files percent</dt>
+              <dd>The percent of files recovered</dd>
+              <dt>Files total</dt>
+              <dd>The total number of files</dd>
+              <dt>Bytes</dt>
+              <dd>The number of bytes to recover</dd>
+              <dt>Bytes recovered</dt>
+              <dd>The bytes recovered</dd>
+              <dt>Bytes percent</dt>
+              <dd>The percent of bytes recovered</dd>
+              <dt>Bytes total</dt>
+              <dd>The total number of bytes</dd>
+              <dt>Translog</dt>
+              <dd>The number of translog ops to recover</dd>
+              <dt>Translog Recovered</dt>
+              <dd>The translog ops recovered</dd>
+              <dt>Translog percent</dt>
+              <dd>The percent of translog ops recovered</dd>
+            </dl>
           </div>
 
           <hr>
@@ -849,6 +958,16 @@
             <p>
               Here, a user can update their password.
             </p>
+            <h6>
+              <span class="fa fa-fw fa-cog"></span>&nbsp;
+              Notifiers
+            </h6>
+            <p>
+              Here, an <strong>admin</strong> user can create, update, and delete notifiers.
+              The available notifiers are Slack, Email, and texts via Twilio.
+              Notifiers can be used to alert users that cron queries have found matching sessions.
+              Notifiers alert every <strong>10</strong> minutes if there are <strong>new</strong> matches.
+            </p>
           </div>
 
           <hr>
@@ -984,13 +1103,13 @@
             </transition-group>
           </table>
           <div v-if="!filteredFields || !filteredFields.length"
-            class="text-danger text-center">
+            class="text-danger text-center mb-4">
             <span class="fa fa-warning">
             </span>&nbsp;
             No results match your search
           </div>
           <div v-if="error"
-            class="alert alert-warning mt-3">
+            class="alert alert-warning mt-3 mb-4">
             <span class="fa fa-warning">
             </span>&nbsp;
             Error retrieving fields:
@@ -1052,23 +1171,7 @@ export default {
 
         this.sortFields(this.fieldQuery.sortField);
 
-        this.filteredFields = this.fields.filter((field) => {
-          let hasMatch = field.exp.toLowerCase().includes(
-            this.searchFields.toLowerCase()
-          ) ||
-          field.friendlyName.toLowerCase().includes(
-            this.searchFields.toLowerCase()
-          );
-
-          if (this.showDBFields) {
-            hasMatch = hasMatch ||
-            field.dbField.toLowerCase().includes(
-              this.searchFields.toLowerCase()
-            );
-          }
-
-          return hasMatch;
-        });
+        this.filteredFields = this.$options.filters.searchFields(this.searchFields, this.fields);
       }, 400);
     },
     toggleDBFields: function () {

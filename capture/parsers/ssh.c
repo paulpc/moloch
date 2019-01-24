@@ -14,8 +14,11 @@
  */
 #include "moloch.h"
 
+#define MAX_SSH_BUFFER 8196
+
 typedef struct {
-    uint32_t   sshLen;
+    char       buf[2][MAX_SSH_BUFFER];
+    int32_t    len[2];
     uint16_t   packets[2];
     uint16_t   counts[2][2];
     uint16_t   done;
@@ -24,10 +27,95 @@ typedef struct {
 extern MolochConfig_t        config;
 LOCAL  int verField;
 LOCAL  int keyField;
+LOCAL  int hasshField;
+LOCAL  int hasshServerField;
 
 /******************************************************************************/
-// SSH Parsing currently assumes the parts we want from a SSH Packet will be
-// in a single TCP packet.  Kind of sucks.
+LOCAL void ssh_parse_keyinit(MolochSession_t *session, const unsigned char *data, int remaining, int isDst)
+{
+    BSB   bsb;
+    char  hbuf[30000];
+    BSB   hbsb;
+
+    uint32_t       len = 0;
+    unsigned char *value = 0;
+
+    BSB_INIT(bsb, data, remaining);
+    BSB_INIT(hbsb, hbuf, sizeof(hbuf));
+
+    BSB_IMPORT_skip(bsb, 16);
+
+    BSB_IMPORT_u32(bsb, len);
+    BSB_IMPORT_ptr(bsb, value, len);
+    BSB_EXPORT_ptr(hbsb, value, len);
+    BSB_EXPORT_u08(hbsb, ';');
+
+
+    BSB_IMPORT_u32(bsb, len);
+    BSB_IMPORT_skip(bsb, len);
+
+    BSB_IMPORT_u32(bsb, len);
+    BSB_IMPORT_ptr(bsb, value, len);
+
+    if (BSB_IS_ERROR(bsb)) return;
+    if (!isDst) {
+        BSB_EXPORT_ptr(hbsb, value, len);
+        BSB_EXPORT_u08(hbsb, ';');
+    }
+
+    BSB_IMPORT_u32(bsb, len);
+    BSB_IMPORT_ptr(bsb, value, len);
+
+    if (BSB_IS_ERROR(bsb)) return;
+    if (isDst) {
+        BSB_EXPORT_ptr(hbsb, value, len);
+        BSB_EXPORT_u08(hbsb, ';');
+    }
+
+    BSB_IMPORT_u32(bsb, len);
+    BSB_IMPORT_ptr(bsb, value, len);
+
+    if (BSB_IS_ERROR(bsb)) return;
+    if (!isDst) {
+        BSB_EXPORT_ptr(hbsb, value, len);
+        BSB_EXPORT_u08(hbsb, ';');
+    }
+
+    BSB_IMPORT_u32(bsb, len);
+    BSB_IMPORT_ptr(bsb, value, len);
+
+    if (BSB_IS_ERROR(bsb)) return;
+    if (isDst) {
+        BSB_EXPORT_ptr(hbsb, value, len);
+        BSB_EXPORT_u08(hbsb, ';');
+    }
+
+    BSB_IMPORT_u32(bsb, len);
+    BSB_IMPORT_ptr(bsb, value, len);
+
+    if (BSB_IS_ERROR(bsb)) return;
+    if (!isDst) {
+        BSB_EXPORT_ptr(hbsb, value, len);
+    }
+
+    BSB_IMPORT_u32(bsb, len);
+    BSB_IMPORT_ptr(bsb, value, len);
+
+    if (BSB_IS_ERROR(bsb)) return;
+    if (isDst) {
+        BSB_EXPORT_ptr(hbsb, value, len);
+    }
+
+    if (!BSB_IS_ERROR(bsb) && !BSB_IS_ERROR(hbsb)) {
+        gchar *md5 = g_compute_checksum_for_data(G_CHECKSUM_MD5, (guchar *)hbuf, BSB_LENGTH(hbsb));
+        if (!moloch_field_string_add(isDst?hasshServerField:hasshField, session, md5, 32, FALSE)) {
+            g_free(md5);
+        }
+
+    }
+}
+
+/******************************************************************************/
 LOCAL int ssh_parser(MolochSession_t *session, void *uw, const unsigned char *data, int remaining, int which)
 {
     SSHInfo_t *ssh = uw;
@@ -52,10 +140,11 @@ LOCAL int ssh_parser(MolochSession_t *session, void *uw, const unsigned char *da
         }
     }
 
-    // ssh->done is set when are finished looking for version string and keys
+    // ssh->done is set when are finished decoding
     if (ssh->done)
         return 0;
 
+    // Version handshake
     if (remaining > 3 && memcmp("SSH", data, 3) == 0) {
         unsigned char *n = memchr(data, 0x0a, remaining);
         if (n && *(n-1) == 0x0d)
@@ -69,56 +158,47 @@ LOCAL int ssh_parser(MolochSession_t *session, void *uw, const unsigned char *da
         return 0;
     }
 
-    if (which != 1)
-        return 0;
+    // Actual messages
+    memcpy(ssh->buf[which] + ssh->len[which], data, MIN(remaining, (int)sizeof(ssh->buf[which]) - ssh->len[which]));
+    ssh->len[which] += MIN(remaining, (int)sizeof(ssh->buf[which]) - ssh->len[which]);
 
-    BSB bsb;
-    BSB_INIT(bsb, data, remaining);
+    while (ssh->len[which] > 6) {
+        BSB bsb;
+        BSB_INIT(bsb, ssh->buf[which], ssh->len[which]);
 
-    while (BSB_REMAINING(bsb) > 6) {
-        uint32_t loopRemaining = BSB_REMAINING(bsb);
+        uint32_t sshLen = 0;
+        BSB_IMPORT_u32(bsb, sshLen);
 
-        // If 0 looking for a ssh packet, otherwise in the middle of ssh packet
-        if (ssh->sshLen == 0) {
-            BSB_IMPORT_u32(bsb, ssh->sshLen);
-
-            // Can't have a ssh packet > 35000 bytes.
-            if (ssh->sshLen >= 35000) {
-                ssh->done = 1;
-                return 0;
-            }
-            ssh->sshLen += 4;
-
-            uint8_t    sshCode = 0;
-            BSB_IMPORT_skip(bsb, 1); // padding length
-            BSB_IMPORT_u08(bsb, sshCode);
-
-            if (sshCode == 33) {
-                ssh->done = 1;
-
-                uint32_t keyLen = 0;
-                BSB_IMPORT_u32(bsb, keyLen);
-
-                if (!BSB_IS_ERROR(bsb) && BSB_REMAINING(bsb) >= keyLen) {
-                    char *str = g_base64_encode(BSB_WORK_PTR(bsb), keyLen);
-                    if (!moloch_field_string_add(keyField, session, str, (keyLen/3+1)*4, FALSE)) {
-                        g_free(str);
-                    }
-                }
-                break;
-            }
+        if (sshLen < 2 || sshLen > MAX_SSH_BUFFER) {
+            ssh->done = 1;
+            return 0;
         }
 
-        if (loopRemaining > ssh->sshLen) {
-            // Processed all, looking for another packet
-            BSB_IMPORT_skip(bsb, loopRemaining);
-            ssh->sshLen = 0;
-            continue;
-        } else {
-            // Waiting on more data then in this callback
-            ssh->sshLen -= loopRemaining;
+        if (sshLen > BSB_REMAINING(bsb))
+            return 0;
+
+        uint8_t    sshCode = 0;
+        BSB_IMPORT_skip(bsb, 1); // padding length
+        BSB_IMPORT_u08(bsb, sshCode);
+
+        if (sshCode == 20) {
+            ssh_parse_keyinit(session, BSB_WORK_PTR(bsb), BSB_REMAINING(bsb), which);
+        } else if (sshCode == 33) {
+            ssh->done = 1;
+
+            uint32_t keyLen = 0;
+            BSB_IMPORT_u32(bsb, keyLen);
+
+            if (!BSB_IS_ERROR(bsb) && BSB_REMAINING(bsb) >= keyLen) {
+                char *str = g_base64_encode(BSB_WORK_PTR(bsb), keyLen);
+                if (!moloch_field_string_add(keyField, session, str, (keyLen/3+1)*4, FALSE)) {
+                    g_free(str);
+                }
+            }
             break;
         }
+        ssh->len[which] -= 4 + sshLen;
+        memmove(ssh->buf[which], ssh->buf[which] + sshLen + 4, ssh->len[which]);
     }
     return 0;
 }
@@ -153,6 +233,18 @@ void moloch_parser_init()
     keyField = moloch_field_define("ssh", "termfield",
         "ssh.key", "Key", "ssh.key",
         "SSH Key",
+        MOLOCH_FIELD_TYPE_STR_HASH,  MOLOCH_FIELD_FLAG_CNT,
+        (char *)NULL);
+
+    hasshField = moloch_field_define("ssh", "lotermfield",
+        "ssh.hassh", "HASSH", "ssh.hassh",
+        "SSH HASSH field",
+        MOLOCH_FIELD_TYPE_STR_HASH,  MOLOCH_FIELD_FLAG_CNT,
+        (char *)NULL);
+
+    hasshServerField = moloch_field_define("ssh", "lotermfield",
+        "ssh.hasshServer", "HASSH Server", "ssh.hasshServer",
+        "SSH HASSH Server field",
         MOLOCH_FIELD_TYPE_STR_HASH,  MOLOCH_FIELD_FLAG_CNT,
         (char *)NULL);
 

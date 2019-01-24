@@ -129,18 +129,22 @@ Vue.filter('humanReadableNumber', (num) => {
  * this.$options.filters.timezoneDateString(1524680821, "local", "YYYY/MM/DD HH:mm:ss z");
  *
  * @param {int} seconds      The time in seconds from epoch
- * @param {string} timezone  The timezone to use ('gmt' or 'local'), default = 'local'
+ * @param {string} timezone  The timezone to use ('gmt', 'local', or 'localtz'), default = 'local'
  * @param {string} format    The format to display the date string, default = 'YYYY/MM/DD HH:mm:ss z'
  * @returns {string}         The date formatted and converted to the requested timezone
  */
 Vue.filter('timezoneDateString', (seconds, timezone, format) => {
   if (!format) { format = 'YYYY/MM/DD HH:mm:ss z'; }
 
+  let time = 1000 * seconds;
+
   if (timezone === 'gmt') {
-    return moment.tz(1000 * seconds, 'gmt').format(format);
+    return moment.tz(time, 'gmt').format(format);
+  } else if (timezone === 'localtz') {
+    return moment.tz(time, Intl.DateTimeFormat().resolvedOptions().timeZone).format(format);
   }
 
-  return moment(1000 * seconds).format(format);
+  return moment(time).format(format);
 });
 
 /**
@@ -201,4 +205,32 @@ Vue.filter('readableTime', function (ms) {
   }
 
   return result || '0';
+});
+
+/**
+ * Searches fields for a term
+ * Looks for the term in field friendlyName, exp, and aliases
+ *
+ * @example
+ * '{{ searchTerm | searchFields(fields) }}'
+ * this.$options.filters.searchFields('test', this.fields);
+ *
+ * @param {string} searchTerm The string to search for within the fields
+ * @param {array} fields      The list of fields to search
+ * @returns {array}           An array of fields that match the search term
+ */
+Vue.filter('searchFields', function (searchTerm, fields) {
+  if (!searchTerm) { searchTerm = ''; }
+  return fields.filter((field) => {
+    if (field.regex !== undefined || field.noFacet === 'true') {
+      return false;
+    }
+
+    searchTerm = searchTerm.toLowerCase();
+    return field.friendlyName.toLowerCase().includes(searchTerm) ||
+      field.exp.toLowerCase().includes(searchTerm) ||
+      (field.aliases && field.aliases.some(item => {
+        return item.toLowerCase().includes(searchTerm);
+      }));
+  });
 });

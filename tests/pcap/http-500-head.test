@@ -2,6 +2,7 @@
    "sessions2" : [
       {
          "body" : {
+            "communityId" : "1:X7UpSqqooWNz7fR2GEUYfGnLVK0=",
             "dstBytes" : 455,
             "dstDataBytes" : 155,
             "dstIp" : "10.156.206.202",
@@ -88,6 +89,7 @@
                ],
                "useragentCnt" : 1
             },
+            "initRTT" : 192,
             "ipProtocol" : 6,
             "lastPacket" : 1361891421481,
             "length" : 775,

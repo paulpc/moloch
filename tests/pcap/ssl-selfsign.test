@@ -10,6 +10,7 @@
                   ],
                   "notAfter" : 1521991598000,
                   "notBefore" : 1519399598000,
+                  "remainingDays" : -1,
                   "serial" : "00b27e45d092b4dddf",
                   "subjectCN" : [
                      "molochftw"
@@ -18,6 +19,7 @@
                }
             ],
             "certCnt" : 1,
+            "communityId" : "1:B0KZ8/dCBnVra4vqcDaOEhO9D2Y=",
             "dstBytes" : 6086,
             "dstDataBytes" : 5526,
             "dstGEO" : "US",
@@ -27,6 +29,7 @@
             "dstPort" : 4443,
             "fileId" : [],
             "firstPacket" : 1519400125658,
+            "initRTT" : 0,
             "ipProtocol" : 6,
             "lastPacket" : 1519400125663,
             "length" : 4,
@@ -116,6 +119,10 @@
                   "03e697d7655911e630ee3ee8e2a02ba4"
                ],
                "ja3Cnt" : 1,
+               "ja3s" : [
+                  "9f527afa113542d92a2c3b08c525ee1d"
+               ],
+               "ja3sCnt" : 1,
                "version" : [
                   "SSLv3"
                ],

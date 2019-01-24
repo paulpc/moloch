@@ -2,6 +2,7 @@
    "sessions2" : [
       {
          "body" : {
+            "communityId" : "1:Y6I3JhgebNYJ7cm/dvZaIvCLNoU=",
             "dstASN" : "AS4385 Rochester Institute of Technology",
             "dstBytes" : 428,
             "dstDataBytes" : 90,
@@ -21,6 +22,7 @@
             "dstRIR" : "ARIN",
             "fileId" : [],
             "firstPacket" : 1454301530932,
+            "initRTT" : 12,
             "ipProtocol" : 6,
             "lastPacket" : 1454301531009,
             "length" : 78,

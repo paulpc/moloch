@@ -120,7 +120,7 @@ typedef struct moloch_trie {
 
 typedef struct {
     MolochStringHead_t  commonName; // 2.5.4.3
-    char               *orgName;    // 2.5.4.10
+    MolochStringHead_t  orgName;    // 2.5.4.10
     char                orgUtf8;
 } MolochCertInfo_t;
 
@@ -588,6 +588,8 @@ typedef struct moloch_session {
     uint32_t               lastFileNum;
     uint32_t               saveTime;
     uint32_t               packets[2];
+    uint32_t               synTime;
+    uint32_t               ackTime;
 
     uint16_t               port1;
     uint16_t               port2;

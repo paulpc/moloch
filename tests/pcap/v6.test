@@ -2,6 +2,7 @@
    "sessions2" : [
       {
          "body" : {
+            "communityId" : "1:JBeyh8m0a90BZxNrl8qsXhtgfcQ=",
             "dns" : {
                "ASN" : [
                   "AS4713 NTT Communications Corporation"
@@ -39,9 +40,9 @@
                "mailserverHostCnt" : 2,
                "mailserverIp" : [
                   "210.160.95.97",
-                  "3ffe:501:410:0:2c0:dfff:fe47:33e",
+                  "3ffe:0501:0410:0000:02c0:dfff:fe47:033e",
                   "210.160.95.99",
-                  "3ffe:501:410:100:5254:ff:feda:48bf"
+                  "3ffe:0501:0410:0100:5254:00ff:feda:48bf"
                ],
                "mailserverIpCnt" : 4,
                "mailserverRIR" : [
@@ -350,6 +351,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:TAfNmOf2SE9RgHaSxnnX6snX4Ww=",
             "dns" : {
                "host" : [
                   "www.yahoo.com"
@@ -374,9 +376,9 @@
                ],
                "nameserverASN" : [
                   "AS3301 Telia Company AB",
-                  "AS3561 Savvis",
-                  "AS3561 Savvis",
-                  "AS3561 Savvis"
+                  "AS3561 CenturyLink Communications, LLC",
+                  "AS3561 CenturyLink Communications, LLC",
+                  "AS3561 CenturyLink Communications, LLC"
                ],
                "nameserverGEO" : [
                   "SE",
@@ -483,6 +485,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:rVJbatlZZnoXe+eex1w9w0qUxE8=",
             "dstBytes" : 0,
             "dstDataBytes" : 0,
             "dstIp" : "ff02:0000:0000:0000:0000:0000:0000:0009",
@@ -539,6 +542,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:2og62ygpvkvOHHBzrbmT+iTofTM=",
             "dns" : {
                "ASN" : [
                   "---",
@@ -662,6 +666,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:KCHULnC2GCfanzHfU34Gr1Za/Zo=",
             "dstBytes" : 6335,
             "dstDataBytes" : 3747,
             "dstIp" : "3ffe:0501:0410:0000:02c0:dfff:fe47:033e",
@@ -678,6 +683,7 @@
             "dstPort" : 22,
             "fileId" : [],
             "firstPacket" : 921159918266,
+            "initRTT" : 28,
             "ipProtocol" : 6,
             "lastPacket" : 921159923604,
             "length" : 5338,
@@ -861,6 +867,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:+n2Xm0RMkkAREj2667uE6/dobbM=",
             "dns" : {
                "ASN" : [
                   "---",
@@ -984,6 +991,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:Rrq8mpQOqi9txAgqnIKyTjBP65M=",
             "dstBytes" : 0,
             "dstDataBytes" : 0,
             "dstIp" : "3ffe:0501:0410:0000:02c0:dfff:fe47:033e",
@@ -1042,6 +1050,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:lJ2EpPqi0BT6qTU7EMhhJ+SUXVU=",
             "dns" : {
                "host" : [
                   "a.e.9.6.7.0.e.f.f.f.7.9.0.6.2.0.1.0.0.0.0.0.0.0.7.0.5.0.e.f.f.3.ip6.int"
@@ -1143,6 +1152,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:jZbgHwfnj1bPaKBDiIRmffpeZk4=",
             "dstBytes" : 0,
             "dstDataBytes" : 0,
             "dstIp" : "3ffe:0501:0410:0000:02c0:dfff:fe47:033e",
@@ -1201,6 +1211,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:VZWBbt3717+pOvzLkDY5NmKLsVw=",
             "dstBytes" : 0,
             "dstDataBytes" : 0,
             "dstIp" : "3ffe:0501:0410:0000:02c0:dfff:fe47:033e",
@@ -1259,6 +1270,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:PrhM2bX7u4cS7xpN4UdVyWzRXZ4=",
             "dstBytes" : 0,
             "dstDataBytes" : 0,
             "dstIp" : "3ffe:0501:0410:0000:02c0:dfff:fe47:033e",
@@ -1386,6 +1398,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:6fW9tSY4vOSbkT1OommJEIbAgOs=",
             "dns" : {
                "host" : [
                   "0.f.f.7.6.b.e.f.f.f.7.9.0.6.2.0.2.0.8.1.0.0.0.0.1.0.5.0.e.f.f.3.ip6.int"
@@ -1409,7 +1422,7 @@
                "nameserverIp" : [
                   "203.178.136.188",
                   "203.178.141.212",
-                  "3ffe:501:4819:2000:5254:ff:fedc:50d2"
+                  "3ffe:0501:4819:2000:5254:00ff:fedc:50d2"
                ],
                "nameserverIpCnt" : 3,
                "nameserverRIR" : [
@@ -1496,6 +1509,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:FuiRMncy2mhAkCJ4mYumMiRK0uw=",
             "dstBytes" : 0,
             "dstDataBytes" : 0,
             "dstIp" : "3ffe:0501:0410:0000:02c0:dfff:fe47:033e",
@@ -1554,6 +1568,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:pzh5zVYL61xkF2XP5r6N4T4UZzs=",
             "dstBytes" : 0,
             "dstDataBytes" : 0,
             "dstIp" : "3ffe:0501:0410:0000:02c0:dfff:fe47:033e",
@@ -1612,6 +1627,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:GCMi8ajuhuVeMeNiDHgP/XG0/Fo=",
             "dstBytes" : 0,
             "dstDataBytes" : 0,
             "dstIp" : "3ffe:0501:0410:0000:02c0:dfff:fe47:033e",
@@ -1739,6 +1755,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:2cUeFYFpuMSs0fxGv+ak3hNZ/V8=",
             "dns" : {
                "host" : [
                   "2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.5.4.3.2.0.0.8.1.1.0.5.0.e.f.f.3.ip6.int"
@@ -1762,7 +1779,7 @@
                "nameserverIp" : [
                   "203.178.136.188",
                   "203.178.141.212",
-                  "3ffe:501:4819:2000:5254:ff:fedc:50d2"
+                  "3ffe:0501:4819:2000:5254:00ff:fedc:50d2"
                ],
                "nameserverIpCnt" : 3,
                "nameserverRIR" : [
@@ -1849,6 +1866,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:eXykMyBXKmtuhixXdk+pC1vq4Lg=",
             "dstBytes" : 0,
             "dstDataBytes" : 0,
             "dstIp" : "3ffe:0501:0410:0000:02c0:dfff:fe47:033e",
@@ -1907,6 +1925,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:1/77V7ArBY5fw8OFEgnq0HRK4Io=",
             "dstBytes" : 0,
             "dstDataBytes" : 0,
             "dstIp" : "3ffe:0501:0410:0000:02c0:dfff:fe47:033e",
@@ -1965,6 +1984,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:I5ZJdS8rgZWIL4cUqtQijFePD1U=",
             "dstBytes" : 0,
             "dstDataBytes" : 0,
             "dstIp" : "3ffe:0501:0410:0000:02c0:dfff:fe47:033e",
@@ -2092,6 +2112,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:MxtfBMwM5+MDHy9yBdlSflxBHso=",
             "dns" : {
                "host" : [
                   "e.3.3.0.7.4.e.f.f.f.f.d.0.c.2.0.0.0.0.0.0.1.4.0.1.0.5.0.e.f.f.3.ip6.int"
@@ -2193,6 +2214,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:hu9f8vJP/peFHO9YZu3fQzSeA/k=",
             "dstBytes" : 0,
             "dstDataBytes" : 0,
             "dstIp" : "3ffe:0501:0410:0000:02c0:dfff:fe47:033e",
@@ -2251,6 +2273,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:hjcQwKOvkwTtfnBCXaDVU6u7WU4=",
             "dstBytes" : 0,
             "dstDataBytes" : 0,
             "dstIp" : "3ffe:0501:0410:0000:02c0:dfff:fe47:033e",
@@ -2309,6 +2332,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:PL+Hx3+dyZ2Y3rpTAH6dRtDSO30=",
             "dns" : {
                "ASN" : [
                   "---"
@@ -2514,6 +2538,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:eqkepZjUXBd6FRCDWLx9UiqGwk8=",
             "dns" : {
                "host" : [
                   "2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.1.0.0.1.0.0.0.0.1.0.5.0.e.f.f.3.ip6.int"
@@ -2537,7 +2562,7 @@
                "nameserverIp" : [
                   "203.178.141.212",
                   "203.178.136.188",
-                  "3ffe:501:4819:2000:5254:ff:fedc:50d2"
+                  "3ffe:0501:4819:2000:5254:00ff:fedc:50d2"
                ],
                "nameserverIpCnt" : 3,
                "nameserverRIR" : [
@@ -2624,6 +2649,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:DDTJae3ti7Hy+J9ixs257S0tiAo=",
             "dns" : {
                "host" : [
                   "2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.1.0.0.1.0.0.0.0.1.0.5.0.e.f.f.3.ip6.int"
@@ -2647,7 +2673,7 @@
                "nameserverIp" : [
                   "203.178.136.188",
                   "203.178.141.212",
-                  "3ffe:501:4819:2000:5254:ff:fedc:50d2"
+                  "3ffe:0501:4819:2000:5254:00ff:fedc:50d2"
                ],
                "nameserverIpCnt" : 3,
                "nameserverRIR" : [
@@ -2734,6 +2760,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:/xPcVFFOsrfzUnBW7pMSIw/VZL8=",
             "dns" : {
                "host" : [
                   "2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.1.0.0.1.0.0.0.0.1.0.5.0.e.f.f.3.ip6.int"
@@ -2757,7 +2784,7 @@
                "nameserverIp" : [
                   "203.178.136.188",
                   "203.178.141.212",
-                  "3ffe:501:4819:2000:5254:ff:fedc:50d2"
+                  "3ffe:0501:4819:2000:5254:00ff:fedc:50d2"
                ],
                "nameserverIpCnt" : 3,
                "nameserverRIR" : [
@@ -2966,6 +2993,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:ROb1V7Hyin1yz+TVtdcyErmoHrA=",
             "dns" : {
                "ASN" : [
                   "AS2497 Internet Initiative Japan Inc.",
@@ -3006,7 +3034,7 @@
                "nameserverIp" : [
                   "202.232.15.98",
                   "202.232.2.44",
-                  "3ffe:507:0:1:260:97ff:fe07:69ea"
+                  "3ffe:0507:0000:0001:0260:97ff:fe07:69ea"
                ],
                "nameserverIpCnt" : 3,
                "nameserverRIR" : [
@@ -3219,6 +3247,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:qZzFhHofOhwoToiR1LMEMG6Y/sA=",
             "dns" : {
                "host" : [
                   "a.e.9.6.7.0.e.f.f.f.7.9.0.6.2.0.1.0.0.0.0.0.0.0.7.0.5.0.e.f.f.3.ip6.int"
@@ -3238,7 +3267,7 @@
                "nameserverHostCnt" : 1,
                "nameserverIp" : [
                   "202.232.15.98",
-                  "3ffe:507:0:1:260:97ff:fe07:69ea"
+                  "3ffe:0507:0000:0001:0260:97ff:fe07:69ea"
                ],
                "nameserverIpCnt" : 2,
                "nameserverRIR" : [
@@ -3324,6 +3353,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:MceIKUK+lZ3tlzhY93h8oQCkcxI=",
             "dns" : {
                "host" : [
                   "a.e.9.6.7.0.e.f.f.f.7.9.0.6.2.0.1.0.0.0.0.0.0.0.7.0.5.0.e.f.f.3.ip6.int"
@@ -3343,7 +3373,7 @@
                "nameserverHostCnt" : 1,
                "nameserverIp" : [
                   "202.232.15.98",
-                  "3ffe:507:0:1:260:97ff:fe07:69ea"
+                  "3ffe:0507:0000:0001:0260:97ff:fe07:69ea"
                ],
                "nameserverIpCnt" : 2,
                "nameserverRIR" : [
@@ -3429,6 +3459,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:g33nkzkY8GSyKHxDGKBXBEpzqrY=",
             "dns" : {
                "host" : [
                   "a.e.9.6.7.0.e.f.f.f.7.9.0.6.2.0.1.0.0.0.0.0.0.0.7.0.5.0.e.f.f.3.ip6.int"
@@ -3448,7 +3479,7 @@
                "nameserverHostCnt" : 1,
                "nameserverIp" : [
                   "202.232.15.98",
-                  "3ffe:507:0:1:260:97ff:fe07:69ea"
+                  "3ffe:0507:0000:0001:0260:97ff:fe07:69ea"
                ],
                "nameserverIpCnt" : 2,
                "nameserverRIR" : [
@@ -3534,6 +3565,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:DblIC7Bw7gfCmEuAOolUPPBOsO8=",
             "dns" : {
                "host" : [
                   "a.e.9.6.7.0.e.f.f.f.7.9.0.6.2.0.1.0.0.0.0.0.0.0.7.0.5.0.e.f.f.3.ip6.int"
@@ -3553,7 +3585,7 @@
                "nameserverHostCnt" : 1,
                "nameserverIp" : [
                   "202.232.15.98",
-                  "3ffe:507:0:1:260:97ff:fe07:69ea"
+                  "3ffe:0507:0000:0001:0260:97ff:fe07:69ea"
                ],
                "nameserverIpCnt" : 2,
                "nameserverRIR" : [
@@ -3639,6 +3671,7 @@
       },
       {
          "body" : {
+            "communityId" : "1:LNV1UXbmJ7TWlJ6joUSCakDis2M=",
             "dns" : {
                "host" : [
                   "a.e.9.6.7.0.e.f.f.f.7.9.0.6.2.0.1.0.0.0.0.0.0.0.7.0.5.0.e.f.f.3.ip6.int"
@@ -3658,7 +3691,7 @@
                "nameserverHostCnt" : 1,
                "nameserverIp" : [
                   "202.232.15.98",
-                  "3ffe:507:0:1:260:97ff:fe07:69ea"
+                  "3ffe:0507:0000:0001:0260:97ff:fe07:69ea"
                ],
                "nameserverIpCnt" : 2,
                "nameserverRIR" : [

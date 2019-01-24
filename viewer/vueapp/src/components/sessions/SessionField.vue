@@ -86,9 +86,16 @@
             </b-dropdown-item>
             <b-dropdown-item
               @click.prevent.stop="newTabSessions(expr, pd.queryVal, '==')"
-              :title="'Open in new Sessions tab with ' + expr + ' == ' + pd.queryVal + ' added to the search expression'">
+              :title="'Open a new Sessions tab with ' + expr + ' == ' + pd.queryVal + ' added to the search expression'">
               <span class="fa fa-external-link-square"></span>&nbsp;
-              Open New Sessions Tab
+              New Sessions Tab
+            </b-dropdown-item>
+            <b-dropdown-item
+              v-if="expression"
+              @click.prevent.stop="newTabSessions(expr, pd.queryVal, '==', true)"
+              :title="'Open a new Sessions tab with ' + expr + ' == ' + pd.queryVal + ' as the root search expression'">
+              <span class="fa fa-external-link"></span>&nbsp;
+              New Sessions Tab (with only this value)
             </b-dropdown-item>
             <b-dropdown-item
               @click="isOpen = false"
@@ -123,7 +130,7 @@
       <span v-if="field.dbField === 'info'">
         <moloch-session-info
           :session="session"
-          :field="field">
+          :info-fields="infoFields">
         </moloch-session-info>
       </span> <!-- /info column -->
       <!-- recurse on child fields -->
@@ -166,7 +173,8 @@ export default {
     'parse', // whether to parse the value
     'timezone', // what timezone date fields should be in ('gmt' or 'local')
     'sessionBtn', // whether to display a button to add the value to the expression and go to sessions page
-    'pullLeft' // whether the dropdown should drop down from the left
+    'pullLeft', // whether the dropdown should drop down from the left
+    'infoFields' // info fields to display
   ],
   data: function () {
     return {
@@ -187,7 +195,7 @@ export default {
       return false;
     },
     parsed: function () {
-      if (!this.field || this.value === undefined) { return; }
+      if (!this.field || this.value === '' || this.value === undefined) { return; }
 
       let result = {
         queryVal: this.value,
@@ -202,11 +210,12 @@ export default {
         let qVal = result[i].queryVal;
 
         switch (this.field.type) {
+          case 'date':
           case 'seconds':
             qVal = val; // save original value as the query value
             val = this.$options.filters.timezoneDateString(
               Math.floor(val / 1000),
-              this.timezone,
+              this.timezone || this.$store.state.user.settings.timezone,
               'YYYY/MM/DD HH:mm:ss z'
             );
 
@@ -225,7 +234,7 @@ export default {
             }
             break;
           case 'integer':
-            if (this.field.category !== 'port') {
+            if (this.field.category !== 'port' && this.field.exp !== 'vlan') {
               qVal = val; // save original value as the query value
               val = this.$options.filters.commaString(val);
             }
@@ -315,16 +324,22 @@ export default {
      * @param {string} field  The field name
      * @param {string} value  The field value
      * @param {string} op     The relational operator
+     * @param {boolean} root  Whether the expression should be added as the root expression
      */
-    newTabSessions: function (field, value, op) {
+    newTabSessions: function (field, value, op, root) {
       this.isOpen = false; // close the dropdown
 
       let appendExpression = this.buildExpression(field, value, op);
 
       // build new expression
-      let newExpression = this.expression || '';
-      if (newExpression) { newExpression += ' && '; }
-      newExpression += appendExpression;
+      let newExpression;
+      if (!root) {
+        newExpression = this.expression || '';
+        if (newExpression) { newExpression += ' && '; }
+        newExpression += appendExpression;
+      } else {
+        newExpression = appendExpression;
+      }
 
       let routeData = this.$router.resolve({
         path: '/sessions',

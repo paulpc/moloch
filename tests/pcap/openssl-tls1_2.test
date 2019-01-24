@@ -5,30 +5,20 @@
             "cert" : [
                {
                   "hash" : "73:59:75:5c:6d:f9:a0:ab:c3:06:0b:ce:36:95:64:c8:ec:45:42:a3",
-                  "issuerON" : "Equifax",
+                  "issuerON" : [
+                     "Equifax"
+                  ],
                   "notAfter" : 1534824000000,
                   "notBefore" : 1021953600000,
+                  "remainingDays" : -1,
                   "serial" : "12bbe6",
                   "subjectCN" : [
                      "geotrust global ca"
                   ],
-                  "subjectON" : "GeoTrust Inc.",
+                  "subjectON" : [
+                     "GeoTrust Inc."
+                  ],
                   "validDays" : 5936
-               },
-               {
-                  "hash" : "bb:dc:e1:3e:9d:53:7a:52:29:91:5c:b1:23:c7:aa:b0:a8:55:e7:98",
-                  "issuerCN" : [
-                     "geotrust global ca"
-                  ],
-                  "issuerON" : "GeoTrust Inc.",
-                  "notAfter" : 1483228799000,
-                  "notBefore" : 1365174955000,
-                  "serial" : "023a76",
-                  "subjectCN" : [
-                     "google internet authority g2"
-                  ],
-                  "subjectON" : "Google Inc",
-                  "validDays" : 1366
                },
                {
                   "alt" : [
@@ -87,18 +77,44 @@
                   "issuerCN" : [
                      "google internet authority g2"
                   ],
-                  "issuerON" : "Google Inc",
+                  "issuerON" : [
+                     "Google Inc"
+                  ],
                   "notAfter" : 1419292800000,
                   "notBefore" : 1411553285000,
+                  "remainingDays" : -1,
                   "serial" : "7a5b0bd895632f87",
                   "subjectCN" : [
                      "*.google.com"
                   ],
-                  "subjectON" : "Google Inc",
+                  "subjectON" : [
+                     "Google Inc"
+                  ],
                   "validDays" : 89
+               },
+               {
+                  "hash" : "bb:dc:e1:3e:9d:53:7a:52:29:91:5c:b1:23:c7:aa:b0:a8:55:e7:98",
+                  "issuerCN" : [
+                     "geotrust global ca"
+                  ],
+                  "issuerON" : [
+                     "GeoTrust Inc."
+                  ],
+                  "notAfter" : 1483228799000,
+                  "notBefore" : 1365174955000,
+                  "remainingDays" : -1,
+                  "serial" : "023a76",
+                  "subjectCN" : [
+                     "google internet authority g2"
+                  ],
+                  "subjectON" : [
+                     "Google Inc"
+                  ],
+                  "validDays" : 1366
                }
             ],
             "certCnt" : 3,
+            "communityId" : "1:Hfs5tYbyoB20l9oRNYWqL/gm/+M=",
             "dstASN" : "AS15169 Google LLC",
             "dstBytes" : 5014,
             "dstDataBytes" : 4478,
@@ -120,6 +136,7 @@
             "dstRIR" : "ARIN",
             "fileId" : [],
             "firstPacket" : 1413337896106,
+            "initRTT" : 1,
             "ipProtocol" : 6,
             "lastPacket" : 1413337896584,
             "length" : 477,
@@ -235,6 +252,10 @@
                   "609a9998ac9d232d213aee990ec5162f"
                ],
                "ja3Cnt" : 1,
+               "ja3s" : [
+                  "a1b387fbca4317aaaddf6e89abfca09a"
+               ],
+               "ja3sCnt" : 1,
                "version" : [
                   "TLSv1.2"
                ],

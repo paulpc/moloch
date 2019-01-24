@@ -176,6 +176,8 @@ import FocusInput from '../utils/FocusInput';
 
 import flatPickr from 'vue-flatpickr-component';
 import 'flatpickr/dist/flatpickr.css';
+import 'flatpickr/dist/themes/dark.css';
+import moment from 'moment-timezone';
 
 const hourSec = 3600;
 let currentTimeSec;
@@ -205,7 +207,9 @@ export default {
         allowInput: true, // let user edit the input manually
         enableTime: true, // display time picker
         enableSeconds: true, // display seconds in time picker
-        minuteIncrement: 1 // increment minutes by 1 instead of 5 (default)
+        minuteIncrement: 1, // increment minutes by 1 instead of 5 (default)
+        time_24hr: true, // show 24 hour time instead of am/pm
+        parseDate: this.parseTimezoneDate // show the date in the user configured timezone
       },
       stopTimeConfig: {
         dateFormat: 'U', // seconds from Jan 1, 1970
@@ -215,7 +219,9 @@ export default {
         allowInput: true, // let user edit the input manually
         enableTime: true, // display time picker
         enableSeconds: true, // display seconds in time picker
-        minuteIncrement: 1 // increment minutes by 1 instead of 5 (default)
+        minuteIncrement: 1, // increment minutes by 1 instead of 5 (default)
+        time_24hr: true, // show 24 hour time instead of am/pm
+        parseDate: this.parseTimezoneDate // show the date in the user configured timezone
       }
     };
   },
@@ -223,14 +229,6 @@ export default {
     // watch for the date, startTime, stopTime, interval, and bounding
     // route parameters to change, then update the view
     '$route.query': 'updateParams',
-    'updateTime': function (newVal, oldVal) {
-      if (newVal) {
-        // calculate new stop/start time
-        this.updateStartStopTime();
-        // tell the parent the time params have changed
-        this.$emit('timeChange');
-      }
-    },
     // watch for other components to update the start and stop time
     'time': {
       deep: true,
@@ -241,6 +239,14 @@ export default {
           dateChanged = true;
           this.validateDate();
         }
+      }
+    },
+    'updateTime': function (newVal, oldVal) {
+      if (newVal) {
+        // calculate new stop/start time
+        this.updateStartStopTime();
+        // tell the parent the time params have changed
+        this.$emit('timeChange');
       }
     }
   },
@@ -360,8 +366,7 @@ export default {
     /**
      * Fired when a date value is changed manually or the datepicker is closed
      * Validates a date and updates delta time (stop time - start time)
-     * Applies the date start/stop time url parameters and removes the date url parameter
-     * Updating the url parameter triggers updateParams
+     * start/stop url parameters are updated in Search.vue timeUpdate function
      */
     validateDate: function () {
       if (!dateChanged) { return; }
@@ -385,15 +390,6 @@ export default {
 
       // update the displayed time range
       this.deltaTime = stopSec - startSec;
-
-      this.$router.push({
-        query: {
-          ...this.$route.query,
-          date: undefined,
-          stopTime: this.time.stopTime,
-          startTime: this.time.startTime
-        }
-      });
     },
     closeStartPicker: function () {
       this.$refs.startTime.fp.close();
@@ -512,6 +508,30 @@ export default {
       }
 
       if (change) { this.$emit('timeChange'); }
+    },
+    /**
+     * Parses a date number into a date string in the user configured timezone
+     * @param {number} date Seconds from 1970
+     */
+    parseTimezoneDate: function (date) {
+      date = date * 1000; // seconds to ms
+
+      let timezonedDate;
+
+      if (this.timezone === 'gmt') {
+        timezonedDate = moment.tz(date, 'gmt');
+      } else {
+        timezonedDate = moment(date);
+      }
+
+      return new Date(
+        timezonedDate.year(),
+        timezonedDate.month(),
+        timezonedDate.date(),
+        timezonedDate.hour(),
+        timezonedDate.minute(),
+        timezonedDate.second()
+      );
     }
   }
 };

@@ -2,6 +2,7 @@
    "sessions2" : [
       {
          "body" : {
+            "communityId" : "1:/wxImZfyysTBc/FfJh8ZIhrdJbI=",
             "dstASN" : "AS36459 GitHub, Inc.",
             "dstBytes" : 313,
             "dstDataBytes" : 107,
@@ -88,6 +89,7 @@
                ],
                "useragentCnt" : 1
             },
+            "initRTT" : 20,
             "ipProtocol" : 6,
             "lastPacket" : 1385394928608,
             "length" : 125,

@@ -2,6 +2,7 @@
    "sessions2" : [
       {
          "body" : {
+            "communityId" : "1:JyQ6uQSVR95peZHUdpcExPE7Dzw=",
             "dstASN" : "AS0001 Cool Beans!",
             "dstBytes" : 1290,
             "dstDataBytes" : 942,
@@ -144,6 +145,7 @@
                ],
                "useragentCnt" : 1
             },
+            "initRTT" : 178,
             "ipProtocol" : 6,
             "lastPacket" : 1385474412431,
             "length" : 117939,

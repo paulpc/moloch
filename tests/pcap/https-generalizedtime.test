@@ -23,14 +23,19 @@
                   "issuerCN" : [
                      "certum level iv ca"
                   ],
-                  "issuerON" : "Unizeto Technologies S.A.",
+                  "issuerON" : [
+                     "Unizeto Technologies S.A."
+                  ],
                   "notAfter" : 1451573263000,
                   "notBefore" : 1415717263000,
+                  "remainingDays" : -1,
                   "serial" : "2e8f3b9cbc17eacb6459a3b8c0b598fb",
                   "subjectCN" : [
                      "mail.yandex.ru"
                   ],
-                  "subjectON" : "Yandex LLC",
+                  "subjectON" : [
+                     "Yandex LLC"
+                  ],
                   "validDays" : 415
                },
                {
@@ -38,18 +43,24 @@
                   "issuerCN" : [
                      "certum ca"
                   ],
-                  "issuerON" : "Unizeto Sp. z o.o.",
+                  "issuerON" : [
+                     "Unizeto Sp. z o.o."
+                  ],
                   "notAfter" : 1709470465000,
                   "notBefore" : 1236084865000,
+                  "remainingDays" : 1,
                   "serial" : "4ca5fec6617c48b056382a8280e0508c",
                   "subjectCN" : [
                      "certum level iv ca"
                   ],
-                  "subjectON" : "Unizeto Technologies S.A.",
+                  "subjectON" : [
+                     "Unizeto Technologies S.A."
+                  ],
                   "validDays" : 5479
                }
             ],
             "certCnt" : 2,
+            "communityId" : "1:1Vhwrjwo6Dp0JRtAPwmn/2IaaTw=",
             "dstASN" : "AS0001 Cool Beans!",
             "dstBytes" : 5216,
             "dstDataBytes" : 5036,
@@ -77,6 +88,7 @@
                ],
                "hostCnt" : 1
             },
+            "initRTT" : 54,
             "ipProtocol" : 6,
             "lastPacket" : 1421771550224,
             "length" : 188,
@@ -166,6 +178,10 @@
                   "8ca01c116f7fa9e77c6e1800eac1bec2"
                ],
                "ja3Cnt" : 1,
+               "ja3s" : [
+                  "ba1a5333bb8ec7cf39a75e56a252116a"
+               ],
+               "ja3sCnt" : 1,
                "srcSessionId" : [
                   "51273b31b1b975c9276907197fbf6b855bc4387e341cea1d5cf727c086c0774b"
                ],

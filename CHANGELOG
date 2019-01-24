@@ -14,7 +14,64 @@ Node Versions:
 
 NOTICE: Restart wiseService before capture when upgrading
 
-1.6.l 2018/11/xx
+1.7.1 2019/02/XX
+
+1.7.0 2019/01/17
+  - NOTICE: db.pl upgrade is required
+  - release - node 8.15.0, cyberchef
+  - capture - new cert remainingDays field
+  - capture - new tcp initRTT field
+  - viewer - cron query notifications (issue #489)
+  - viewer - can't use es scroll api with "from" (issue #981)
+  - viewer - Export CSV uses the columns shown
+  - viewer - field history for search expression (issue #595)
+  - viewer - fix date/time picker not using user set timezone (issue #977)
+  - viewer - don’t display undefined or empty field values
+  - viewer - fix timezone parsing in session detail date field values
+  - viewer - show error if using an outdated browser (issue #980)
+  - viewer - export results intersection
+  - viewer - add clickable labels to the info column
+  - viewer - reset the width of the session table columns when switching back to the default
+  - parliament - search and page results on the issues page (issues #982 and #983)
+  - parliament - add a length of time threshold for “low packets” issues (issue #968)
+  - capture - Fixed corrupt file sequence numbers being used when
+              when ES is under heavy load
+  - capture - Fix importing more then 256 files at once not working correctly (issue #984)
+  - all - communityId support for tcp/udp (issue #966)
+  - capture - In live capture clean up sessions even if no packets are being received
+  - db - improve expire efficiency
+  - capture - fix elasticsearch classifier
+  - capture - for offline pcap honor umask when --copy is used (issue #976)
+  - viewer - Fix some rXSS, thanks Esben Sparre Andreasen of Semmle Security Research Team
+
+1.6.2 2018/12/07
+  - NOTICE: db.pl upgrade is required
+  - suricata - fix crash when signature name > 128 characters long
+  - suricata - fix severity parsing (again)
+  - capture - fix possible crash when exporting invalid utf8
+  - db - support new --shardsPerNode option
+  - viewer - don't issue search when closing the date/time pickers
+  - viewer - download packets src/dst bytes img
+  - viewer - option to show timezone with every timestamp
+  - viewer - added new user permissions (hideStats, hideFiles, hidePcap, and disablePcapDownload)
+  - parliament - add option to provide link to dashboard in alert notifications
+  - viewer - configure connection node/link popup data
+  - release - build snf plugin with screwdriver
+  - capture - fix tls parser inifite loop
+  - viewer - can customize fields in the info column
+  - viewer - new es recovery tab
+  - viewer - stats page shows when data is being loaded from server
+
+1.6.1 2018/11/06
+  - NOTICE: db.pl upgrade is required
+  - capture - ja3s support (issue #949)
+  - capture - hassh support (issue #950)
+  - capture - simpleKEKId can be a template
+  - all - Certificate org names can be an array now
+  - wise - reverse dns supports servers setting
+  - all - new written/unwritten stats to see how much Moloch has written or
+          not written to disk
+  - all - don't index packet positions or packet lengths in ES
 
 1.6.0 2018/10/29
   - NOTICE: db.pl upgrade is required
@@ -48,7 +105,6 @@ NOTICE: Restart wiseService before capture when upgrading
   - multiviewer - Can save user settings and such (pr #935)
   - viewer - Can share views with all other users
   - db.pl - New backup/restore commands, saves everything but sessions
-
 
 1.5.3 2018/09/10
   - release - libpcap 1.9.0

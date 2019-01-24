@@ -62,7 +62,7 @@
           <div class="input-group input-group-sm">
             <span class="input-group-prepend legend cursor-help"
               v-b-tooltip.hover
-              title="Select a field for the source nodes">
+              title="Select a field for the destination nodes">
               <span class="input-group-text"
                 :style="{'background-color': tertiaryColor + '!important'}">
                 Dst:
@@ -171,6 +171,98 @@
           </button>
         </div> <!-- /zoom in/out -->
 
+        <!-- node fields button -->
+        <b-dropdown
+          size="sm"
+          no-flip
+          no-caret
+          class="field-vis-menu ml-1"
+          variant="theme-primary"
+          v-if="fields && groupedFields && nodeFields">
+          <template slot="button-content">
+            <span class="fa fa-circle-o"
+              v-b-tooltip.hover
+              title="Toggle visible fields in the node popups">
+            </span>
+          </template>
+          <b-dropdown-header>
+            <input type="text"
+              v-model="fieldQuery"
+              class="form-control form-control-sm dropdown-typeahead"
+              placeholder="Search for fields..."
+            />
+          </b-dropdown-header>
+          <b-dropdown-divider>
+          </b-dropdown-divider>
+          <template
+            v-for="(group, key) in filteredFields">
+            <b-dropdown-header
+              :key="key"
+              v-if="group.length"
+              class="group-header">
+              {{ key }}
+            </b-dropdown-header>
+            <!-- TODO fix tooltip placement -->
+            <!-- https://github.com/bootstrap-vue/bootstrap-vue/issues/1352 -->
+            <b-dropdown-item
+              v-for="(field, k) in group"
+              :key="key + k"
+              :class="{'active':isFieldVisible(field.dbField, nodeFields) >= 0}"
+              v-b-tooltip.hover.top
+              :title="field.help"
+              @click.stop.prevent="toggleFieldVisibility(field.dbField, nodeFields)">
+              {{ field.friendlyName }}
+              <small>({{ field.exp }})</small>
+            </b-dropdown-item>
+          </template>
+        </b-dropdown> <!-- /node fields button -->
+
+        <!-- link fields button -->
+        <b-dropdown
+          size="sm"
+          no-flip
+          no-caret
+          class="field-vis-menu ml-1"
+          variant="theme-primary"
+          v-if="fields && groupedFields && linkFields">
+          <template slot="button-content">
+            <span class="fa fa-link"
+              v-b-tooltip.hover
+              title="Toggle visible fields in the link popups">
+            </span>
+          </template>
+          <b-dropdown-header>
+            <input type="text"
+              v-model="fieldQuery"
+              class="form-control form-control-sm dropdown-typeahead"
+              placeholder="Search for fields..."
+            />
+          </b-dropdown-header>
+          <b-dropdown-divider>
+          </b-dropdown-divider>
+          <template
+            v-for="(group, key) in filteredFields">
+            <b-dropdown-header
+              :key="key"
+              v-if="group.length"
+              class="group-header">
+              {{ key }}
+            </b-dropdown-header>
+            <!-- TODO fix tooltip placement -->
+            <!-- https://github.com/bootstrap-vue/bootstrap-vue/issues/1352 -->
+            <b-dropdown-item
+              v-for="(field, k) in group"
+              :key="key + k"
+              :class="{'active':isFieldVisible(field.dbField, linkFields) >= 0}"
+              v-b-tooltip.hover.top
+              :title="field.help"
+              @click.stop.prevent="toggleFieldVisibility(field.dbField, linkFields)">
+              {{ field.friendlyName }}
+              <small>({{ field.exp }})</small>
+            </b-dropdown-item>
+          </template>
+        </b-dropdown> <!-- /link fields button -->
+
       </div>
     </form>
 
@@ -198,8 +290,9 @@
       <div class="network-container"
         v-show="!error && recordsFiltered !== 0">
         <div id="network"></div>
-        <div class="node-popup connections-popup" ref="nodePopup"></div>
-        <div class="link-popup connections-popup" ref="linkPopup"></div>
+        <div ref="infoPopup">
+          <div class="connections-popup"></div>
+        </div>
       </div>
 
     </div>
@@ -218,18 +311,23 @@ import MolochError from '../utils/Error';
 import MolochLoading from '../utils/Loading';
 import MolochNoResults from '../utils/NoResults';
 import MolochFieldTypeahead from '../utils/FieldTypeahead';
+import UserService from '../users/UserService';
 
 import d3 from '../../../../public/d3.min.js';
+const saveSvgAsPng = require('save-svg-as-png');
 
 // save frequently accessed elements
 let networkElem;
-let nodePopupVue;
-let linkPopupVue;
+let popupVue;
 
 // save visualization data
 let force, svgMain;
 
-const saveSvgAsPng = require('save-svg-as-png');
+let fieldsInitialized = false;
+
+// default fields to display in the node/link popups
+const defaultLinkFields = [ 'totBytes', 'totDataBytes', 'totPackets', 'node' ];
+const defaultNodeFields = [ 'totBytes', 'totDataBytes', 'totPackets', 'node' ];
 
 export default {
   name: 'Connections',
@@ -254,7 +352,10 @@ export default {
       tertiaryColor: null,
       fields: [],
       srcFieldTypeahead: undefined,
-      dstFieldTypeahead: undefined
+      dstFieldTypeahead: undefined,
+      fieldQuery: '',
+      groupedFields: undefined,
+      fieldsMap: {}
     };
   },
   computed: {
@@ -277,6 +378,24 @@ export default {
     },
     user: function () {
       return this.$store.state.user;
+    },
+    filteredFields: function () {
+      let filteredGroupedFields = {};
+
+      for (let group in this.groupedFields) {
+        filteredGroupedFields[group] = this.$options.filters.searchFields(
+          this.fieldQuery,
+          this.groupedFields[group]
+        );
+      }
+
+      return filteredGroupedFields;
+    },
+    nodeFields: function () {
+      return this.$store.state.user.settings.connNodeFields || defaultNodeFields;
+    },
+    linkFields: function () {
+      return this.$store.state.user.settings.connLinkFields || defaultLinkFields;
     }
   },
   watch: {
@@ -357,7 +476,26 @@ export default {
       saveSvgAsPng.saveSvgAsPng(document.getElementById('graphSvg'), 'connections.png', {backgroundColor: '#FFFFFF'});
     },
     closePopups: function () {
+      if (popupVue) { popupVue.$destroy(); }
+      popupVue = undefined;
       $('.connections-popup').hide();
+    },
+    isFieldVisible: function (id, list) {
+      return list.indexOf(id);
+    },
+    toggleFieldVisibility: function (id, list) {
+      let index = this.isFieldVisible(id, list);
+
+      if (index >= 0) { // it's visible
+        // remove it from the visible node fields list
+        list.splice(index, 1);
+      } else { // it's hidden
+        // add it to the visible headers list
+        list.push(id);
+        this.loadData(true);
+      }
+
+      this.saveVisibleFields();
     },
     /* event functions ----------------------------------------------------- */
     changeSrcField: function (field) {
@@ -381,12 +519,14 @@ export default {
       });
     },
     /* helper functions ---------------------------------------------------- */
-    loadData: function () {
+    loadData: function (dataReloadOnly) {
       this.loading = true;
       this.error = false;
 
-      this.svg.selectAll('.link').remove();
-      this.svg.selectAll('.node').remove();
+      if (!dataReloadOnly) {
+        this.svg.selectAll('.link').remove();
+        this.svg.selectAll('.node').remove();
+      }
 
       if (!this.$route.query.srcField) {
         this.query.srcField = this.user.settings.connSrcField;
@@ -395,12 +535,26 @@ export default {
         this.query.dstField = this.user.settings.connDstField;
       }
 
+      // send the requested fields with the query
+      let fields = this.nodeFields;
+      // combine fields from nodes and links
+      for (let f in this.linkFields) {
+        let id = this.linkFields[f];
+        if (fields.indexOf(id) > -1) { continue; }
+        fields.push(id);
+      }
+      this.query.fields = fields.join(',');
+
       this.$http.get('connections.json', { params: this.query })
         .then((response) => {
           this.error = '';
           this.loading = false;
-          this.getFields();
-          this.processData(response.data);
+          if (!dataReloadOnly) {
+            this.getFields();
+            this.processData(response.data);
+          } else {
+            this.updateData(response.data);
+          }
           this.recordsFiltered = response.data.recordsFiltered;
         }, (error) => {
           this.loading = false;
@@ -411,13 +565,16 @@ export default {
       FieldService.get(true)
         .then((result) => {
           this.fields = result;
-          this.fields.push({
-            dbField: 'ip.dst:port',
-            exp: 'ip.dst:port',
-            help: 'Destination IP:Destination Port',
-            group: 'general',
-            friendlyName: 'Dst IP:Dst Port'
-          });
+          if (!fieldsInitialized) {
+            this.fields.push({
+              dbField: 'ip.dst:port',
+              exp: 'ip.dst:port',
+              help: 'Destination IP:Destination Port',
+              group: 'general',
+              friendlyName: 'Dst IP:Dst Port'
+            });
+            fieldsInitialized = true;
+          }
 
           for (let field of this.fields) {
             if (field.dbField === this.query.srcField) {
@@ -427,6 +584,8 @@ export default {
               this.dstFieldTypeahead = field.friendlyName;
             }
           }
+
+          this.setupFields();
         }).catch((error) => {
           this.loading = false;
           this.error = error.text || error;
@@ -451,6 +610,12 @@ export default {
       }
 
       return undefined;
+    },
+    updateData: function (json) {
+      this.closePopups();
+      force.nodes(json.nodes).links(json.links).start();
+      this.node.data(json.nodes);
+      this.link.data(json.links);
     },
     processData: function (json) {
       if (!json.nodes) {
@@ -571,8 +736,8 @@ export default {
         .data(json.nodes)
         .enter().append('g')
         .attr('class', 'node')
-        .attr('id', function (d) { return 'id' + d.id.replace(/[:.]/g, '_'); })
-        // .attr('y', function (d,i) {return i; })
+        /* eslint-disable no-useless-escape */
+        .attr('id', function (d) { return 'id' + d.id.replace(/[\[\]:.]/g, '_'); })
         .call(self.drag)
         .on('mouseover', function (d) {
           if (d3.select(this).classed('dragging')) {
@@ -645,11 +810,11 @@ export default {
       }
 
       this.closePopups();
-      if (!nodePopupVue) {
-        nodePopupVue = new Vue({
+      if (!popupVue) {
+        popupVue = new Vue({
           template: `
-            <div class="node-popup connections-popup">
-              <div class="margined-bottom">
+            <div class="connections-popup">
+              <div class="mb-2">
                 <strong>{{node.id}}</strong>
                 <a class="pull-right cursor-pointer no-decoration"
                   @click="closePopup()">
@@ -664,21 +829,44 @@ export default {
                 <dd>{{node.weight}}</dd>
                 <dt>Sessions</dt>
                 <dd>{{node.sessions}}</dd>
-                <dt>Bytes</dt>
-                <dd>{{node.by}}</dd>
-                <dt>Databytes</dt>
-                <dd>{{node.db}}</dd>
-                <dt>Packets</dt>
-                <dd>{{node.pa}}</dd>
+
+                <span v-for="field in nodeFields"
+                  :key="field">
+                  <dt :title="fields[field].friendlyName">
+                    {{ fields[field].exp }}
+                  </dt>
+                  <dd>
+                    <span v-if="!Array.isArray(node[field])">
+                      <moloch-session-field
+                        :value="node[field]"
+                        :session="node"
+                        :expr="fields[field].exp"
+                        :field="fields[field]"
+                        :pull-left="true">
+                      </moloch-session-field>
+                    </span>
+                    <span v-else
+                      v-for="value in node[field]">
+                      <moloch-session-field
+                        :value="value"
+                        :session="node"
+                        :expr="fields[field].exp"
+                        :field="fields[field]"
+                        :pull-left="true">
+                      </moloch-session-field>
+                    </span>&nbsp;
+                  </dd>
+                </span>
+
                 <dt>Expressions</dt>
                 <dd>
                   <a class="cursor-pointer no-decoration"
-                    href="#"
+                    href="javascript:void(0)"
                     @click.stop.prevent="addExpression('&&')">
                     AND
                   </a>&nbsp;
                   <a class="cursor-pointer no-decoration"
-                    href="#"
+                    href="javascript:void(0)"
                     @click.stop.prevent="addExpression('||')">
                     OR
                   </a>
@@ -686,8 +874,8 @@ export default {
               </dl>
 
               <a class="cursor-pointer no-decoration"
-                href="#"
-                @click.stop.prevent="hideNode()">
+                href="javascript:void(0)"
+                @click.stop.prevent="hideNode">
                 <span class="fa fa-eye-slash">
                 </span>&nbsp;
                 Hide Node
@@ -696,13 +884,16 @@ export default {
           `,
           parent: this,
           data: {
-            node: node
+            node: node,
+            nodeFields: this.nodeFields,
+            fields: this.fieldsMap
           },
           methods: {
             hideNode: function () {
               let self = this;
               self.$parent.closePopups();
-              self.$parent.svg.select('#id' + self.node.id.replace(/[:.]/g, '_')).remove();
+              /* eslint-disable no-useless-escape */
+              self.$parent.svg.select('#id' + self.node.id.replace(/[\[\]:.]/g, '_')).remove();
               self.$parent.svg.selectAll('.link')
                 .filter(function (d, i) {
                   return d.source.id === self.node.id || d.target.id === self.node.id;
@@ -717,52 +908,80 @@ export default {
               this.$parent.closePopups();
             }
           }
-        }).$mount(this.$refs.nodePopup);
+        }).$mount($(this.$refs.infoPopup)[0].firstChild);
       }
 
-      nodePopupVue.node = node;
+      popupVue.node = node;
 
-      that.positionPopup('.node-popup', node.px, node.py);
+      $('.connections-popup').show();
     },
     showLinkPopup: function (that, link, mouse) {
       link.dstExp = that.dbField2Exp(that.query.dstField);
       link.srcExp = that.dbField2Exp(that.query.srcField);
 
       this.closePopups();
-      if (!linkPopupVue) {
-        linkPopupVue = new Vue({
+      if (!popupVue) {
+        popupVue = new Vue({
           template: `
-            <div class="link-popup connections-popup">
-              <div class="margined-bottom">
+            <div class="connections-popup">
+              <div class="mb-2">
                 <strong>Link</strong>
                 <a class="pull-right cursor-pointer no-decoration"
-                   @click="closePopup()">
+                   @click="closePopup">
                   <span class="fa fa-close"></span>
                 </a>
               </div>
               <div>{{link.source.id}}</div>
-              <div class="margined-bottom">{{link.target.id}}</div>
+              <div class="mb-2">
+                {{link.target.id}}
+              </div>
 
               <dl class="dl-horizontal">
                 <dt>Sessions</dt>
                 <dd>{{link.value}}</dd>
-                <dt>Bytes</dt>
-                <dd>{{link.by}}</dd>
-                <dt>Databytes</dt>
-                <dd>{{link.db}}</dd>
-                <dt>Packets</dt>
-                <dd>{{link.pa}}</dd>
+
+                <span v-for="field in linkFields"
+                  :key="field">
+                  <dt :title="fields[field].friendlyName">
+                    {{ fields[field].exp }}
+                  </dt>
+                  <dd>
+                    <span v-if="!Array.isArray(link[field])">
+                      <moloch-session-field
+                        :value="link[field]"
+                        :session="link"
+                        :expr="fields[field].exp"
+                        :field="fields[field]"
+                        :pull-left="true">
+                      </moloch-session-field>
+                    </span>
+                    <span v-else
+                      v-for="value in link[field]">
+                      <moloch-session-field
+                        :value="value"
+                        :session="link"
+                        :expr="fields[field].exp"
+                        :field="fields[field]"
+                        :pull-left="true">
+                      </moloch-session-field>
+                    </span>&nbsp;
+                  </dd>
+                </span>
+
                 <dt>Expressions</dt>
                 <dd>
                   <a class="cursor-pointer no-decoration"
+                    href="javascript:void(0)"
                     @click="addExpression('&&')">AND</a>&nbsp;
                   <a class="cursor-pointer no-decoration"
+                    href="javascript:void(0)"
                     @click="addExpression('||')">OR</a>
                 </dd>
               </dl>
 
               <a class="cursor-pointer no-decoration"
-                 @click="hideLink()">
+                href="javascript:void(0)"
+                @click="hideLink">
                 <span class="fa fa-eye-slash"></span>&nbsp;
                 Hide Link
               </a>
@@ -771,7 +990,9 @@ export default {
           `,
           parent: this,
           data: {
-            link: link
+            link: link,
+            linkFields: this.linkFields,
+            fields: this.fieldsMap
           },
           methods: {
             hideLink: function () {
@@ -791,30 +1012,12 @@ export default {
               this.$parent.closePopups();
             }
           }
-        }).$mount(this.$refs.linkPopup);
+        }).$mount($(this.$refs.infoPopup)[0].firstChild);
       }
 
-      linkPopupVue.link = link;
+      popupVue.link = link;
 
-      that.positionPopup('.link-popup', mouse[0], mouse[1]);
-    },
-    /**
-     * Positions and displays a popup on the connections graph within the view
-     * @param {num} px      The x coordinate of the mouse/node
-     * @param {num} py      The y coordinate of the mouse/node
-     * @param {obj} content The content to display in the popup
-     */
-    positionPopup: function (name, px, py) {
-      let x = -180; // 180 = width of popup + 10 padding
-
-      // if the position node is too far to the left to accommodate the popup,
-      // render it on the right of the node instead of the left
-      if (this.trans[0] + (px * this.scale) < 180) { x = 10; }
-
-      $(name).css({
-        left: this.trans[0] + (px * this.scale) + x,
-        top: this.trans[1] + (py * this.scale) - 20
-      }).show();
+      $('.connections-popup').show();
     },
     startD3: function () {
       let self = this;
@@ -904,8 +1107,9 @@ export default {
       this.svg.selectAll('.link').remove();
       this.svg.selectAll('.node').remove();
 
-      $('.node-popup').remove();
-      $('.link-popup').remove();
+      if (popupVue) { popupVue.$destroy(); }
+      popupVue = undefined;
+      $('.connections-popup').remove();
 
       svgMain.remove();
       svgMain = null;
@@ -922,12 +1126,58 @@ export default {
       const scale = this.zoom.scale();
       const translate = this.zoom.translate();
       return [(point[0] - translate[0]) / scale, (point[1] - translate[1]) / scale];
+    },
+    setupFields: function () {
+      // group fields map by field group
+      // and remove duplicate fields (e.g. 'host.dns' & 'dns.host')
+      let existingFieldsLookup = {}; // lookup map of fields in fieldsArray
+      this.groupedFields = {};
+      for (let field of this.fields) {
+        // don't include fields with regex
+        if (field.hasOwnProperty('regex')) { continue; }
+        if (!existingFieldsLookup.hasOwnProperty(field.exp)) {
+          this.fieldsMap[field.dbField] = field;
+          existingFieldsLookup[field.exp] = field;
+          if (!this.groupedFields[field.group]) {
+            this.groupedFields[field.group] = [];
+          }
+          this.groupedFields[field.group].push(field);
+        }
+      }
+    },
+    saveVisibleFields: function () {
+      this.user.settings.connNodeFields = this.nodeFields;
+      this.user.settings.connLinkFields = this.linkFields;
+
+      UserService.saveSettings(this.user.settings, this.user.userId);
     }
   }
 };
 </script>
 
 <style>
+.field-vis-menu > button.btn {
+  border-top-right-radius: 4px !important;
+  border-bottom-right-radius: 4px !important;;
+}
+.field-vis-menu .dropdown-menu input {
+  width: 100%;
+}
+.field-vis-menu .dropdown-menu {
+  max-height: 300px;
+  overflow: auto;
+}
+.field-vis-menu .dropdown-header {
+  padding: .25rem .5rem 0;
+}
+.field-vis-menu .dropdown-header.group-header {
+  text-transform: uppercase;
+  margin-top: 8px;
+  padding: .2rem;
+  font-size: 120%;
+  font-weight: bold;
+}
+
 .connections-page {
   -webkit-user-select: none;
   -moz-user-select: none;
@@ -936,34 +1186,30 @@ export default {
 
 .connections-page .connections-popup {
   position: absolute;
+  left: 0;
+  top: 148px;
+  bottom: 24px;
   display: none;
   font-size: smaller;
   padding: 4px 8px;
-  width: 200px;
-  z-index: 9999;
+  max-width: 300px;
   border: solid 1px var(--color-gray);
   background: var(--color-primary-lightest);
   white-space: nowrap;
-  overflow: hidden;
+  overflow-x: visible;
+  overflow-y: auto;
   text-overflow: ellipsis;
-
-  -webkit-border-radius: var(--px-sm);
-     -moz-border-radius: var(--px-sm);
-          border-radius: var(--px-sm);
-
-  -webkit-box-shadow: 6px 6px 16px -4px black;
-     -moz-box-shadow: 6px 6px 16px -4px black;
-          box-shadow: 6px 6px 16px -4px black;
 }
 .connections-page .connections-popup .dl-horizontal {
   margin-bottom: var(--px-md) !important;
 }
 .connections-page .connections-popup .dl-horizontal dt {
-  width: 80px !important;
+  width: 100px !important;
   text-align: left;
 }
 .connections-page .connections-popup .dl-horizontal dd {
-  margin-left: 85px !important;
+  margin-left: 105px !important;
+  white-space: normal;
 }
 
 /* apply theme colors */
@@ -989,6 +1235,7 @@ export default {
   top: 110px;
   left: 0;
   right: 0;
+  z-index: 4;
   background-color: var(--color-quaternary-lightest);
 
   -webkit-box-shadow: 0 0 16px -2px black;

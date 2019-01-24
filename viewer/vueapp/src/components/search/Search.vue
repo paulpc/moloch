@@ -10,7 +10,8 @@
         class="pull-right ml-1 action-menu-dropdown"
         boundary="body"
         variant="theme-primary">
-        <b-dropdown-item @click="exportPCAP">
+        <b-dropdown-item @click="exportPCAP"
+          v-has-permission="'!disablePcapDownload'">
           <span class="fa fa-fw fa-file-o"></span>&nbsp;
           Export PCAP
         </b-dropdown-item>
@@ -42,6 +43,15 @@
           @click="sendSession(key)">
           <span class="fa fa-fw fa-paper-plane-o"></span>&nbsp;
           Send Session to {{ cluster.name }}
+        </b-dropdown-item>
+        <b-dropdown-item @click="viewIntersection">
+          <span class="fa fa-fw fa-venn">
+            <span class="fa fa-circle-o">
+            </span>
+            <span class="fa fa-circle-o">
+            </span>
+          </span>&nbsp;
+          Export Intersection
         </b-dropdown-item>
       </b-dropdown> <!-- /actions dropdown menu -->
 
@@ -210,12 +220,17 @@
             </moloch-export-pcap>
             <moloch-export-csv v-else-if="actionForm === 'export:csv'"
               :start="start"
+              :fields="fields"
               :done="actionFormDone"
               :sessions="openSessions"
               :num-visible="numVisibleSessions"
               :num-matching="numMatchingSessions"
               :apply-to="actionFormItemRadio">
             </moloch-export-csv>
+            <moloch-intersection v-else-if="actionForm === 'view:intersection'"
+              :done="actionFormDone"
+              :fields="fields">
+            </moloch-intersection>
           </div> <!-- /actions menu forms -->
         </div>
       </div>
@@ -238,6 +253,7 @@ import MolochScrubPcap from '../sessions/Scrub';
 import MolochSendSessions from '../sessions/Send';
 import MolochExportPcap from '../sessions/ExportPcap';
 import MolochExportCsv from '../sessions/ExportCsv';
+import MolochIntersection from '../sessions/Intersection';
 
 export default {
   name: 'MolochSearch',
@@ -251,7 +267,8 @@ export default {
     MolochScrubPcap,
     MolochSendSessions,
     MolochExportPcap,
-    MolochExportCsv
+    MolochExportCsv,
+    MolochIntersection
   },
   props: [
     'openSessions',
@@ -379,6 +396,10 @@ export default {
       this.actionForm = 'create:view';
       this.showApplyButtons = false;
     },
+    viewIntersection: function () {
+      this.actionForm = 'view:intersection';
+      this.showApplyButtons = false;
+    },
     actionFormDone: function (message, success, reloadData) {
       this.actionForm = undefined;
       if (message) {
@@ -419,11 +440,26 @@ export default {
         });
     },
     /**
-     * update the stop/start times in time component, which in turn
-     * notifies this controller (using the 'changeTime' event), then
-     * updates the time params and emits a 'changeSearch' event to parent
+     * If the start/stop time has changed:
+     * Applies the date start/stop time url parameters and removes the date url parameter
+     * Updating the url parameter triggers updateParams in Time.vue
+     * If just a search was issued:
+     * Update the start/stop time in the time component so that the query that is
+     * issued has the correct start/stop time (date only sent if -1)
      */
     timeUpdate: function () {
+      if (this.$store.state.timeRange === '0' &&
+        this.$store.state.time.startTime && this.$store.state.time.stopTime) {
+        this.$router.push({
+          query: {
+            ...this.$route.query,
+            date: undefined,
+            stopTime: this.$store.state.time.stopTime,
+            startTime: this.$store.state.time.startTime
+          }
+        });
+      }
+
       this.updateTime = true;
       setTimeout(() => {
         this.updateTime = false;
