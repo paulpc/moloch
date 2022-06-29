@@ -13,7 +13,7 @@
     "fs-ext": "^0.5.0",
     "method-override": "^2.3.6",
     "multer": "^1.2.0",
-    "passport": "^0.3.2",
+    "passport": "^0.6.0",
     "passport-http": "^0.3.0",
     "peek-stream": "^1.1.1",
     "pngjs": "^3.3.3",
