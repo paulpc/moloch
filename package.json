@@ -20,7 +20,7 @@
     "font-awesome": "^4.7.0",
     "glob": "^7.1.2",
     "iniparser": "http://github.com/awick/node-iniparser/tarball/master",
-    "moment": "^2.19.1",
+    "moment": "^2.29.4",
     "morgan": "^1.9.0",
     "on-headers": "^1.0.1",
     "pug": "^2.0.0",
