@@ -18,7 +18,7 @@
     "elasticsearch": "^15.1.1",
     "express": "^4.16.1",
     "font-awesome": "^4.7.0",
-    "glob": "^7.1.2",
+    "glob": "^9.0.0",
     "iniparser": "http://github.com/awick/node-iniparser/tarball/master",
     "moment": "^2.19.1",
     "morgan": "^1.9.0",
