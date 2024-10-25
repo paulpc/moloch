@@ -29,7 +29,7 @@
     "request-promise": "^4.2.2",
     "sortablejs": "^1.7.0",
     "sqlite3": "^4.0.2",
-    "stylus": "^0.54.5",
+    "stylus": "^0.64.0",
     "unzip": "^0.1.11",
     "vue": "^2.5.16",
     "vue-axios": "^2.1.2",
